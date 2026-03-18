@@ -453,6 +453,8 @@ class DotCleanerApp(App[None]):
                     "Pacchetto/i",
                     "Stato",
                     "Fonte",
+                    "Ultima modifica",
+                    "Ultimo accesso",
                 )
                 yield table
 
@@ -620,6 +622,8 @@ class DotCleanerApp(App[None]):
                 packages_str,
                 status_label,
                 source_label,
+                entry.modified_human,
+                entry.accessed_human,
                 key=key,
             )
 

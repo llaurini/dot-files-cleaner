@@ -12,6 +12,7 @@ Over time, installing and uninstalling applications leaves behind configuration 
 - Maps each entry to its Debian/Ubuntu package(s) using a database of 492 verified mappings, `.desktop` file lookup, and a heuristic fallback
 - Checks installation status via `dpkg-query` with a `which`-based fallback for snap/flatpak/AppImage packages
 - Interactive table with color-coded status (red = uninstalled, yellow = unknown, green = installed)
+- Displays **last-modification** and **last-access** timestamps for each entry
 - Filter by status: All / Uninstalled / Installed / Unknown
 - Select individual entries or select all uninstalled at once
 - Moves selected entries to the FreeDesktop trash (`~/.local/share/Trash`) — **never permanent deletion**
@@ -88,7 +89,10 @@ Certain paths are always excluded:
 - **Desktop-system** (`CONFIG_SYSTEM_EXCLUDE`): `dconf`, `mimeapps.list`, `autostart`, `gtk-3.0`, `pulse`, `systemd`, and similar — removing these would break the desktop environment.
 - **Single files** are only included if explicitly listed (`.gitconfig`, `.vimrc`, `.zshrc`, etc.).
 
-For each included directory, the size is computed recursively.
+For each included directory, the size is computed recursively.  The
+last-modification time (`st_mtime`) and last-access time (`st_atime`) of each
+entry are also recorded at scan time and shown in the table as
+**Ultima modifica** and **Ultimo accesso**.
 
 ### Package mapping
 

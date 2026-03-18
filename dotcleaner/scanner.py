@@ -5,12 +5,15 @@ Scans:
   - ~/.config/*  (first level of subdirectories/files inside .config)
 
 For directories, calculates the total recursive size.
+Each entry records the last-modification timestamp (``st_mtime``) and the
+last-access timestamp (``st_atime``) of the filesystem entry at scan time.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 # Directory/file da escludere sempre dalla lista (troppo di sistema o troppo grandi)
@@ -121,6 +124,8 @@ class DotEntry:
         is_dir: True if the entry is a directory.
         size_bytes: Total size in bytes (recursive for directories).
         source: Origin of the scan, either 'home_dot' or 'config'.
+        modified_at: Timestamp of the last content modification (``st_mtime``).
+        accessed_at: Timestamp of the last access (``st_atime``).
         associated_packages: Debian packages that own this entry.
         match_source: How the package was found: 'database', 'heuristic',
             or 'unknown'.
@@ -133,6 +138,8 @@ class DotEntry:
     is_dir: bool
     size_bytes: int
     source: str  # "home_dot" | "config"
+    modified_at: datetime = field(default_factory=datetime.now)
+    accessed_at: datetime = field(default_factory=datetime.now)
 
     # Campi popolati dal mapper
     associated_packages: list[str] = field(default_factory=list)
@@ -184,6 +191,26 @@ class DotEntry:
                 return f"{size:.1f} {unit}"
             size //= 1024
         return f"{size:.1f} TB"
+
+    @property
+    def modified_human(self) -> str:
+        """Return a human-readable representation of the last-modification time.
+
+        Returns:
+            A string formatted as ``'YYYY-MM-DD HH:MM'``, e.g.
+            ``'2024-03-15 10:22'``.
+        """
+        return self.modified_at.strftime("%Y-%m-%d %H:%M")
+
+    @property
+    def accessed_human(self) -> str:
+        """Return a human-readable representation of the last-access time.
+
+        Returns:
+            A string formatted as ``'YYYY-MM-DD HH:MM'``, e.g.
+            ``'2026-03-17 08:45'``.
+        """
+        return self.accessed_at.strftime("%Y-%m-%d %H:%M")
 
 
 def _dir_size(path: Path) -> int:
@@ -245,6 +272,11 @@ def scan_home(home: Path | None = None) -> list[DotEntry]:
     skipped.  Plain files are only included if they appear in
     ``INCLUDE_SINGLE_FILES``.  Broken symlinks are always ignored.
 
+    Each returned ``DotEntry`` has its ``modified_at`` field set to the
+    last-modification time (``st_mtime``) and its ``accessed_at`` field set
+    to the last-access time (``st_atime``) read from the filesystem at scan
+    time.
+
     Args:
         home: Path to the home directory to scan.  Defaults to
             ``Path.home()`` when ``None``.
@@ -277,6 +309,14 @@ def scan_home(home: Path | None = None) -> list[DotEntry]:
                 continue
             seen_paths.add(resolved)
 
+            try:
+                st = item.lstat()
+                modified_at = datetime.fromtimestamp(st.st_mtime)
+                accessed_at = datetime.fromtimestamp(st.st_atime)
+            except (PermissionError, OSError):
+                modified_at = datetime.now()
+                accessed_at = datetime.now()
+
             entries.append(
                 DotEntry(
                     path=item,
@@ -284,6 +324,8 @@ def scan_home(home: Path | None = None) -> list[DotEntry]:
                     is_dir=item.is_dir(),
                     size_bytes=_entry_size(item),
                     source="home_dot",
+                    modified_at=modified_at,
+                    accessed_at=accessed_at,
                 )
             )
     except (PermissionError, OSError):
@@ -306,6 +348,14 @@ def scan_home(home: Path | None = None) -> list[DotEntry]:
                     continue
                 seen_paths.add(resolved)
 
+                try:
+                    st = item.lstat()
+                    modified_at = datetime.fromtimestamp(st.st_mtime)
+                    accessed_at = datetime.fromtimestamp(st.st_atime)
+                except (PermissionError, OSError):
+                    modified_at = datetime.now()
+                    accessed_at = datetime.now()
+
                 entries.append(
                     DotEntry(
                         path=item,
@@ -313,6 +363,8 @@ def scan_home(home: Path | None = None) -> list[DotEntry]:
                         is_dir=item.is_dir(),
                         size_bytes=_entry_size(item),
                         source="config",
+                        modified_at=modified_at,
+                        accessed_at=accessed_at,
                     )
                 )
         except (PermissionError, OSError):

@@ -7,6 +7,8 @@ of the returned :class:`~dotcleaner.scanner.DotEntry` objects.
 
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -107,6 +109,97 @@ class TestDotEntryProperties:
         entry = make_entry(".vim")
         result = entry.display_path
         assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# Test: DotEntry timestamp properties
+# ---------------------------------------------------------------------------
+
+_DATETIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+
+
+class TestDotEntryTimestampProperties:
+    """Tests for the modified_human and accessed_human properties of DotEntry."""
+
+    def test_modified_human_format(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
+        """Asserts that modified_human returns a string in YYYY-MM-DD HH:MM format."""
+        dt = datetime(2024, 3, 15, 10, 22)
+        entry = make_entry(".foo", modified_at=dt)
+        assert entry.modified_human == "2024-03-15 10:22"
+
+    def test_accessed_human_format(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
+        """Asserts that accessed_human returns a string in YYYY-MM-DD HH:MM format."""
+        dt = datetime(2026, 1, 7, 8, 5)
+        entry = make_entry(".foo", accessed_at=dt)
+        assert entry.accessed_human == "2026-01-07 08:05"
+
+    def test_modified_human_matches_pattern(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
+        """Asserts that modified_human output matches the expected datetime pattern."""
+        entry = make_entry(".bar", modified_at=datetime(2023, 12, 31, 23, 59))
+        assert _DATETIME_PATTERN.match(entry.modified_human)
+
+    def test_accessed_human_matches_pattern(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
+        """Asserts that accessed_human output matches the expected datetime pattern."""
+        entry = make_entry(".bar", accessed_at=datetime(2023, 12, 31, 23, 59))
+        assert _DATETIME_PATTERN.match(entry.accessed_human)
+
+    def test_modified_and_accessed_can_differ(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
+        """Asserts that modified_at and accessed_at are independent fields."""
+        mod = datetime(2020, 6, 1, 12, 0)
+        acc = datetime(2025, 11, 20, 9, 30)
+        entry = make_entry(".baz", modified_at=mod, accessed_at=acc)
+        assert entry.modified_human == "2020-06-01 12:00"
+        assert entry.accessed_human == "2025-11-20 09:30"
+
+    def test_scan_home_populates_modified_at(self, tmp_path: Path) -> None:
+        """Asserts that scan_home sets a valid modified_at datetime on each entry."""
+        home = tmp_path
+        (home / ".vim").mkdir()
+        before = datetime.now()
+        entries = scan_home(home=home)
+        after = datetime.now()
+        assert entries, "Expected at least one entry"
+        for entry in entries:
+            assert isinstance(entry.modified_at, datetime)
+            # The timestamp must be plausible (not in the future beyond 'after')
+            assert entry.modified_at <= after
+
+    def test_scan_home_populates_accessed_at(self, tmp_path: Path) -> None:
+        """Asserts that scan_home sets a valid accessed_at datetime on each entry."""
+        home = tmp_path
+        (home / ".vim").mkdir()
+        entries = scan_home(home=home)
+        assert entries, "Expected at least one entry"
+        for entry in entries:
+            assert isinstance(entry.accessed_at, datetime)
+
+    def test_scan_home_modified_human_is_string(self, tmp_path: Path) -> None:
+        """Asserts that modified_human is a non-empty string after scan_home."""
+        home = tmp_path
+        (home / ".vim").mkdir()
+        entries = scan_home(home=home)
+        for entry in entries:
+            assert isinstance(entry.modified_human, str)
+            assert len(entry.modified_human) > 0
+
+    def test_scan_home_accessed_human_is_string(self, tmp_path: Path) -> None:
+        """Asserts that accessed_human is a non-empty string after scan_home."""
+        home = tmp_path
+        (home / ".vim").mkdir()
+        entries = scan_home(home=home)
+        for entry in entries:
+            assert isinstance(entry.accessed_human, str)
+            assert len(entry.accessed_human) > 0
 
 
 # ---------------------------------------------------------------------------

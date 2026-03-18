@@ -5,6 +5,7 @@ This module provides pytest fixtures used across all test files in this suite.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 from unittest.mock import MagicMock
@@ -114,6 +115,8 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
         installed_packages: list[str] | None = None,
         uninstalled_packages: list[str] | None = None,
         match_source: str = "",
+        modified_at: datetime | None = None,
+        accessed_at: datetime | None = None,
     ) -> DotEntry:
         """Build and return a single ``DotEntry`` for use in tests.
 
@@ -126,6 +129,10 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
             installed_packages: Optional list of installed package names.
             uninstalled_packages: Optional list of uninstalled package names.
             match_source: Mapping phase that produced the association.
+            modified_at: Optional last-modification datetime; defaults to
+                ``datetime.now()`` when ``None``.
+            accessed_at: Optional last-access datetime; defaults to
+                ``datetime.now()`` when ``None``.
 
         Returns:
             A fully initialised ``DotEntry`` backed by a real filesystem path.
@@ -142,6 +149,8 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
             is_dir=is_dir,
             size_bytes=size_bytes,
             source=source,
+            modified_at=modified_at if modified_at is not None else datetime.now(),
+            accessed_at=accessed_at if accessed_at is not None else datetime.now(),
         )
         if associated_packages is not None:
             entry.associated_packages = associated_packages
