@@ -13,6 +13,7 @@ Over time, installing and uninstalling applications leaves behind configuration 
 - Checks installation status via `dpkg-query` with a `which`-based fallback for snap/flatpak/AppImage packages
 - Interactive table with color-coded status (red = uninstalled, yellow = unknown, green = installed)
 - Displays **last-modification** and **last-access** timestamps for each entry
+- **Click any column header to sort** by that column; click again to reverse; click a third time to reset to default order
 - Filter by status: All / Uninstalled / Installed / Unknown
 - Select individual entries or select all uninstalled at once
 - Moves selected entries to the FreeDesktop trash (`~/.local/share/Trash`) — **never permanent deletion**
@@ -71,6 +72,10 @@ pip install -r requirements.txt
 | `4` | Show unknown only |
 | `R` | Reload / rescan |
 | `Q` | Quit |
+
+### Sorting
+
+Click a **column header** to sort by that column. The active column shows a `▲` (ascending) or `▼` (descending) indicator. Clicking the same header a third time resets to the default order (uninstalled first, then unknown, then installed; alphabetical within each group). The checkbox column (`sel`) is not sortable.
 
 ---
 

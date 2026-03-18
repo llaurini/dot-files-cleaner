@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
+from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -29,6 +30,7 @@ from textual.widgets import (
     LoadingIndicator,
     Select,
 )
+from textual.widgets._data_table import ColumnKey
 
 from dotcleaner.checker import PackageChecker
 from dotcleaner.cleaner import trash_entries
@@ -219,6 +221,25 @@ TYPE_LABELS: dict[bool, str] = {
     False: "[dim]FILE[/dim]",
 }
 
+# Mapping column-key → base label (without sort indicator).
+# The empty string for "sel" means the checkbox column has no header text.
+_COLUMN_LABELS: dict[str, str] = {
+    "sel": "",
+    "path": "Path",
+    "tipo": "Tipo",
+    "size": "Dimensione",
+    "pkg": "Pacchetto/i",
+    "status": "Stato",
+    "source": "Fonte",
+    "mtime": "Ultima modifica",
+    "atime": "Ultimo accesso",
+}
+
+# Ordered list of sortable column keys (the "sel" checkbox column is excluded).
+_SORTABLE_COLUMNS: frozenset[str] = frozenset(
+    {"path", "tipo", "size", "pkg", "status", "source", "mtime", "atime"}
+)
+
 
 class ConfirmScreen(ModalScreen[bool]):
     """Modal dialog asking the user to confirm a trash operation.
@@ -368,6 +389,84 @@ def _human_size(size: int) -> str:
     return f"{size:.1f} TB"
 
 
+# Status priority used by the default sort and the semantic "status" column sort.
+_STATUS_ORDER: dict[str, int] = {"uninstalled": 0, "unknown": 1, "installed": 2}
+
+
+def _filter_entries(entries: list[DotEntry], filter_value: str) -> list[DotEntry]:
+    """Return a filtered subset of *entries* according to *filter_value*.
+
+    Args:
+        entries: Full list of ``DotEntry`` objects to filter.
+        filter_value: One of ``'all'``, ``'uninstalled'``, ``'unknown'``,
+            or ``'not_installed'``.  Any other value is treated as ``'all'``.
+
+    Returns:
+        A new list containing only the entries that match the filter.
+    """
+    if filter_value == "uninstalled":
+        return [e for e in entries if e.status == "uninstalled"]
+    if filter_value == "unknown":
+        return [e for e in entries if e.status == "unknown"]
+    if filter_value == "not_installed":
+        return [e for e in entries if e.status in ("uninstalled", "unknown")]
+    return list(entries)
+
+
+def _sort_entries(
+    entries: list[DotEntry],
+    sort_column: str | None,
+    reverse: bool,
+) -> list[DotEntry]:
+    """Return a sorted copy of *entries* for the given column and direction.
+
+    When *sort_column* is ``None`` the default ordering is applied:
+    non-installed entries first (uninstalled → unknown → installed), then
+    alphabetically by name within each status group.
+
+    Args:
+        entries: List of ``DotEntry`` objects to sort.
+        sort_column: Key of the column to sort by, or ``None`` for the default
+            order.  Valid values are ``'path'``, ``'tipo'``, ``'size'``,
+            ``'pkg'``, ``'status'``, ``'source'``, ``'mtime'``, ``'atime'``.
+        reverse: If ``True`` the sort order is reversed (descending).
+
+    Returns:
+        A new sorted list of ``DotEntry`` objects.
+    """
+    result = list(entries)
+    if sort_column is None:
+        result.sort(
+            key=lambda e: (_STATUS_ORDER.get(e.status, 9), e.name.lower())
+        )
+        return result
+
+    if sort_column == "path":
+        result.sort(key=lambda e: e.name.lower(), reverse=reverse)
+    elif sort_column == "tipo":
+        result.sort(key=lambda e: (0 if e.is_dir else 1), reverse=reverse)
+    elif sort_column == "size":
+        result.sort(key=lambda e: e.size_bytes, reverse=reverse)
+    elif sort_column == "pkg":
+        result.sort(
+            key=lambda e: (
+                ", ".join(e.associated_packages).lower()
+                if e.associated_packages
+                else ""
+            ),
+            reverse=reverse,
+        )
+    elif sort_column == "status":
+        result.sort(key=lambda e: _STATUS_ORDER.get(e.status, 9), reverse=reverse)
+    elif sort_column == "source":
+        result.sort(key=lambda e: e.match_source.lower(), reverse=reverse)
+    elif sort_column == "mtime":
+        result.sort(key=lambda e: e.modified_at, reverse=reverse)
+    elif sort_column == "atime":
+        result.sort(key=lambda e: e.accessed_at, reverse=reverse)
+    return result
+
+
 class DotCleanerApp(App[None]):
     """Main Textual application for dot-net-files-cleaner.
 
@@ -409,6 +508,9 @@ class DotCleanerApp(App[None]):
         self._filtered_entries: list[DotEntry] = []
         self._is_loading = True
         self._selected_paths: set[str] = set()
+        # Sort state: None means default order (status-first, then name).
+        self._sort_column: str | None = None
+        self._sort_reverse: bool = False
 
     # ------------------------------------------------------------------
     # Compose
@@ -445,17 +547,8 @@ class DotCleanerApp(App[None]):
                 table: DataTable[str] = DataTable(
                     id="main-table", cursor_type="row", zebra_stripes=True
                 )
-                table.add_columns(
-                    "",  # checkbox
-                    "Path",
-                    "Tipo",
-                    "Dimensione",
-                    "Pacchetto/i",
-                    "Stato",
-                    "Fonte",
-                    "Ultima modifica",
-                    "Ultimo accesso",
-                )
+                for col_key, col_label in _COLUMN_LABELS.items():
+                    table.add_column(col_label, key=col_key)
                 yield table
 
         yield Footer()
@@ -545,38 +638,26 @@ class DotCleanerApp(App[None]):
     def _apply_filter(self) -> None:
         """Apply the current filter to the entry list and refresh the table.
 
-        Entries are sorted uninstalled-first, then unknown, then installed.
-        Calls ``_rebuild_table`` and ``_update_stats`` after filtering.
+        When no column sort is active, entries are sorted uninstalled-first,
+        then unknown, then installed, then alphabetically by name.  When a
+        column sort is active (set via a header click) the entries are sorted
+        by the selected column instead.
+
+        Calls ``_rebuild_table``, ``_update_stats``, and
+        ``_update_column_headers`` after filtering.
 
         Returns:
             None.
         """
-        f = self._current_filter
-        if f == "all":
-            self._filtered_entries = list(self._all_entries)
-        elif f == "uninstalled":
-            self._filtered_entries = [
-                e for e in self._all_entries if e.status == "uninstalled"
-            ]
-        elif f == "unknown":
-            self._filtered_entries = [
-                e for e in self._all_entries if e.status == "unknown"
-            ]
-        elif f == "not_installed":
-            self._filtered_entries = [
-                e for e in self._all_entries if e.status in ("uninstalled", "unknown")
-            ]
-        else:
-            self._filtered_entries = list(self._all_entries)
-
-        # Ordina: non installati prima, poi sconosciuti, poi installati
-        STATUS_ORDER = {"uninstalled": 0, "unknown": 1, "installed": 2}
-        self._filtered_entries.sort(
-            key=lambda e: (STATUS_ORDER.get(e.status, 9), e.name.lower())
+        self._filtered_entries = _sort_entries(
+            _filter_entries(self._all_entries, self._current_filter),
+            self._sort_column,
+            self._sort_reverse,
         )
 
         self._rebuild_table()
         self._update_stats()
+        self._update_column_headers()
 
     def _rebuild_table(self) -> None:
         """Clear and repopulate the DataTable from the filtered entry list.
@@ -656,6 +737,49 @@ class DotCleanerApp(App[None]):
             self.query_one("#stats-label", Label).update(stats)
         except NoMatches:
             pass
+
+    def _update_column_headers(self) -> None:
+        """Update column header labels to display the active sort indicator.
+
+        The active sort column shows a ``▲`` (ascending) or ``▼``
+        (descending) suffix.  All other sortable columns display their base
+        label without any indicator.  The checkbox column (``sel``) is never
+        modified.
+
+        ``content_width`` is updated alongside the label so that Textual
+        allocates enough space to render the indicator without truncation.
+        After updating all columns, ``_update_count`` is incremented and
+        ``check_idle()`` + ``refresh_line(0)`` repaint only the header row.
+
+        Returns:
+            None.
+        """
+        try:
+            table = self.query_one("#main-table", DataTable)
+        except NoMatches:
+            return
+        console = table.app.console
+        for col_key, base_label in _COLUMN_LABELS.items():
+            if col_key == "sel":
+                continue
+            if col_key == self._sort_column:
+                indicator = " ▼" if self._sort_reverse else " ▲"
+                new_label = base_label + indicator
+            else:
+                new_label = base_label
+            try:
+                col = table.columns[ColumnKey(col_key)]
+                label_text = Text(new_label)
+                col.label = label_text
+                col.content_width = max(
+                    col.content_width,
+                    label_text.__rich_measure__(console, console.options).maximum,
+                )
+            except KeyError:
+                pass
+        table._update_count += 1
+        table.check_idle()
+        table.refresh_line(0)
 
     # ------------------------------------------------------------------
     # Actions
@@ -821,12 +945,18 @@ class DotCleanerApp(App[None]):
     def action_reload(self) -> None:
         """Reset all state and restart the background scan from scratch.
 
+        The active column sort and sort direction are also reset to their
+        default values so the table returns to the standard ordering after
+        the reload.
+
         Returns:
             None.
         """
         self._all_entries = []
         self._filtered_entries = []
         self._selected_paths = set()
+        self._sort_column = None
+        self._sort_reverse = False
         self.query_one("#main-screen").display = False
         self.query_one("#loading-screen").display = True
         self._load_data()
@@ -882,3 +1012,41 @@ class DotCleanerApp(App[None]):
                 self._selected_paths.add(key)
             self._rebuild_table()
             self._update_stats()
+
+    @on(DataTable.HeaderSelected)
+    def on_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Sort the table by the clicked column header.
+
+        Clicking a column header cycles through three states:
+        1. Ascending sort (``▲`` indicator shown).
+        2. Descending sort (``▼`` indicator shown).
+        3. Reset to default order (no indicator).
+
+        The checkbox column (``sel``) is not sortable and is ignored.
+
+        Args:
+            event: The ``DataTable.HeaderSelected`` event carrying the column
+                key.
+
+        Returns:
+            None.
+        """
+        col_key_value = event.column_key.value
+        if col_key_value is None or col_key_value not in _SORTABLE_COLUMNS:
+            return
+
+        if self._sort_column == col_key_value:
+            if not self._sort_reverse:
+                # Second click on the same column: switch to descending.
+                self._sort_reverse = True
+            else:
+                # Third click on the same column: reset to default order.
+                self._sort_column = None
+                self._sort_reverse = False
+        else:
+            # First click on a new column: ascending sort.
+            self._sort_column = col_key_value
+            self._sort_reverse = False
+
+        self._apply_filter()
+        self._update_column_headers()
