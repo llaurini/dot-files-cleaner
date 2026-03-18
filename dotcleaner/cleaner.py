@@ -9,17 +9,28 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-try:
-    from send2trash import send2trash as _send2trash  # type: ignore[import]
-    HAS_SEND2TRASH = True
-except ImportError:
-    HAS_SEND2TRASH = False
-    _send2trash = None  # type: ignore[assignment]
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from dotcleaner.scanner import DotEntry
+
+# ---------------------------------------------------------------------------
+# send2trash import — graceful fallback when library is absent
+# ---------------------------------------------------------------------------
+
+_send2trash_fn: Callable[[str], None] | None = None
+HAS_SEND2TRASH: bool = False
+
+try:
+    from send2trash import send2trash as _imported_send2trash
+    _send2trash_fn = _imported_send2trash
+    HAS_SEND2TRASH = True
+except ImportError:
+    pass
+
+# Keep the original name as an alias so existing tests that patch
+# "dotcleaner.cleaner._send2trash" continue to work.
+_send2trash = _send2trash_fn
 
 
 class CleanError(Exception):
@@ -42,14 +53,14 @@ def trash_entry(entry: DotEntry) -> None:
     if not path.exists() and not path.is_symlink():
         raise CleanError(f"Il percorso non esiste: {path}")
 
-    if not HAS_SEND2TRASH:
+    if not HAS_SEND2TRASH or _send2trash is None:
         raise CleanError(
             "La libreria 'send2trash' non è installata. "
             "Esegui: pip install send2trash"
         )
 
     try:
-        _send2trash(str(path))  # type: ignore[misc]
+        _send2trash(str(path))
     except Exception as e:
         raise CleanError(f"Impossibile spostare nel cestino '{path}': {e}") from e
 

@@ -204,20 +204,20 @@ DataTable > .datatable--cursor {
 # Screens
 # ---------------------------------------------------------------------------
 
-FILTER_OPTIONS = [
+FILTER_OPTIONS: list[tuple[str, str]] = [
     ("Tutti", "all"),
     ("Solo non installati", "uninstalled"),
     ("Solo sconosciuti", "unknown"),
     ("Non installati + Sconosciuti", "not_installed"),
 ]
 
-STATUS_LABELS = {
+STATUS_LABELS: dict[str, str] = {
     "installed": "[green]Installato[/green]",
     "uninstalled": "[red]NON installato[/red]",
     "unknown": "[yellow]Sconosciuto[/yellow]",
 }
 
-TYPE_LABELS = {
+TYPE_LABELS: dict[bool, str] = {
     True: "[blue]DIR[/blue]",
     False: "[dim]FILE[/dim]",
 }
@@ -314,14 +314,14 @@ def _human_size(size: int) -> str:
     return f"{size:.1f} TB"
 
 
-class DotCleanerApp(App):
+class DotCleanerApp(App[None]):
     """Applicazione principale dot-net-files-cleaner."""
 
     TITLE = "dot-net-files-cleaner"
     SUB_TITLE = "Pulizia dei dot files orfani"
     CSS = CSS
 
-    BINDINGS: ClassVar[list] = [  # type: ignore[assignment]
+    BINDINGS: ClassVar[list[Binding]] = [  # type: ignore[assignment]
         Binding("q", "quit", "Esci"),
         Binding("d", "delete_selected", "Elimina selezionati"),
         Binding("a", "select_uninstalled", "Seleziona non installati"),
@@ -372,7 +372,7 @@ class DotCleanerApp(App):
                 yield Label("", id="stats-label")
 
             with Vertical(id="table-container"):
-                table = DataTable(id="main-table", cursor_type="row", zebra_stripes=True)
+                table: DataTable[str] = DataTable(id="main-table", cursor_type="row", zebra_stripes=True)
                 table.add_columns(
                     "",           # checkbox
                     "Path",

@@ -126,6 +126,17 @@ Python **3.10+** is required (uses `X | Y` union syntax in type hints).
 
 ---
 
+## Documentation and tests policy
+
+**Every code change must be accompanied by:**
+
+1. **Documentation update** — update `README.md` and/or the relevant module docstrings to reflect any change in behaviour, public API, CLI flags, key bindings, or configuration format. If a new module or public function is added, document it in this file under [Module responsibilities](#module-responsibilities) as well.
+2. **Test update** — add or update tests to cover the changed behaviour. New functions must have at least one unit test. Bug fixes must include a regression test. Tests must pass before committing.
+
+Changes that touch only comments, formatting, or this `AGENTS.md` file are exempt.
+
+---
+
 ## Conventions
 
 ### Code style
@@ -133,6 +144,11 @@ Python **3.10+** is required (uses `X | Y` union syntax in type hints).
 - All public functions and classes must have docstrings.
 - Type hints are required on all function signatures.
 - Use `from __future__ import annotations` at the top of every module.
+- **mypy** is used for static type checking with `strict = True`. Every code change must leave `mypy` error-free. Run it with:
+  ```bash
+  ./venv/bin/python -m mypy dotcleaner/ main.py tests/
+  ```
+  `mypy` is a dev dependency (listed in `requirements-dev.txt`).
 
 ### Adding a new package mapping
 1. Verify the package exists: `dpkg -l <package-name>`
@@ -164,6 +180,9 @@ Python **3.10+** is required (uses `X | Y` union syntax in type hints).
 ## Running checks before committing
 
 ```bash
+# Type checking (must return 0 errors)
+./venv/bin/python -m mypy dotcleaner/ main.py tests/
+
 # Import sanity check
 ./venv/bin/python -c "from dotcleaner.app import DotCleanerApp; print('OK')"
 

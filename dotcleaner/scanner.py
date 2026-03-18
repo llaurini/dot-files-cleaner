@@ -11,7 +11,6 @@ Per le directory, calcola la dimensione totale ricorsiva.
 from __future__ import annotations
 
 import os
-import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -161,7 +160,7 @@ class DotEntry:
         for unit in ("B", "KB", "MB", "GB"):
             if size < 1024:
                 return f"{size:.1f} {unit}"
-            size /= 1024
+            size //= 1024
         return f"{size:.1f} TB"
 
 

@@ -9,6 +9,8 @@ Uso:
     ./venv/bin/python main.py [--home /percorso/home]
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
