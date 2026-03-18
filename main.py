@@ -37,12 +37,16 @@ def main() -> int:
     # Verifica che la home esista
     home = args.home or Path.home()
     if not home.is_dir():
-        print(f"Errore: la directory '{home}' non esiste o non è accessibile.", file=sys.stderr)
+        print(
+            f"Errore: la directory '{home}' non esiste o non è accessibile.",
+            file=sys.stderr,
+        )
         return 1
 
     # Avvia la TUI
     try:
         from dotcleaner.app import DotCleanerApp
+
         app = DotCleanerApp(home=home)
         app.run()
     except KeyboardInterrupt:

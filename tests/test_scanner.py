@@ -10,12 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-import pytest
 
 from dotcleaner.scanner import (
     ALWAYS_EXCLUDE,
     CONFIG_SYSTEM_EXCLUDE,
-    INCLUDE_SINGLE_FILES,
     DotEntry,
     scan_home,
 )
@@ -25,15 +23,20 @@ from dotcleaner.scanner import (
 # Test: DotEntry properties
 # ---------------------------------------------------------------------------
 
+
 class TestDotEntryProperties:
     """Test delle proprietà calcolate di DotEntry."""
 
-    def test_status_unknown_when_no_packages(self, make_entry: Callable[..., DotEntry]) -> None:
+    def test_status_unknown_when_no_packages(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
         """status == 'unknown' se nessun pacchetto associato."""
         entry = make_entry(".foo", associated_packages=[])
         assert entry.status == "unknown"
 
-    def test_status_installed_when_some_installed(self, make_entry: Callable[..., DotEntry]) -> None:
+    def test_status_installed_when_some_installed(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
         """status == 'installed' se almeno un pacchetto è installato."""
         entry = make_entry(
             ".vim",
@@ -43,7 +46,9 @@ class TestDotEntryProperties:
         )
         assert entry.status == "installed"
 
-    def test_status_uninstalled_when_packages_but_none_installed(self, make_entry: Callable[..., DotEntry]) -> None:
+    def test_status_uninstalled_when_packages_but_none_installed(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
         """status == 'uninstalled' se ci sono pacchetti ma nessuno installato."""
         entry = make_entry(
             ".zoom",
@@ -53,7 +58,9 @@ class TestDotEntryProperties:
         )
         assert entry.status == "uninstalled"
 
-    def test_status_installed_even_if_some_uninstalled(self, make_entry: Callable[..., DotEntry]) -> None:
+    def test_status_installed_even_if_some_uninstalled(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
         """status == 'installed' se almeno uno è installato, anche con altri non installati."""
         entry = make_entry(
             ".google-chrome",
@@ -83,7 +90,9 @@ class TestDotEntryProperties:
         entry = make_entry(".foo", size_bytes=2 * 1024 * 1024 * 1024)
         assert entry.size_human == "2.0 GB"
 
-    def test_display_path_relative_to_home(self, tmp_path: Path, make_entry: Callable[..., DotEntry]) -> None:
+    def test_display_path_relative_to_home(
+        self, tmp_path: Path, make_entry: Callable[..., DotEntry]
+    ) -> None:
         """display_path mostra il path relativo alla home."""
         entry = make_entry(".vim")
         # display_path usa Path.home(), non tmp_path, quindi sarà assoluto
@@ -91,7 +100,9 @@ class TestDotEntryProperties:
         assert entry.display_path
         assert isinstance(entry.display_path, str)
 
-    def test_display_path_absolute_fallback(self, make_entry: Callable[..., DotEntry]) -> None:
+    def test_display_path_absolute_fallback(
+        self, make_entry: Callable[..., DotEntry]
+    ) -> None:
         """display_path ritorna path assoluto se non è sotto home."""
         entry = make_entry(".vim")
         result = entry.display_path
@@ -102,6 +113,7 @@ class TestDotEntryProperties:
 # ---------------------------------------------------------------------------
 # Test: scan_home esclusioni ALWAYS_EXCLUDE
 # ---------------------------------------------------------------------------
+
 
 class TestScanHomeAlwaysExclude:
     """Verifica che ALWAYS_EXCLUDE non venga mai incluso nei risultati."""
@@ -135,12 +147,15 @@ class TestScanHomeAlwaysExclude:
         entries = scan_home(home=home)
         result_names = {e.name for e in entries}
         for excluded in ALWAYS_EXCLUDE:
-            assert excluded not in result_names, f"{excluded} non dovrebbe essere nei risultati"
+            assert (
+                excluded not in result_names
+            ), f"{excluded} non dovrebbe essere nei risultati"
 
 
 # ---------------------------------------------------------------------------
 # Test: scan_home — file singoli
 # ---------------------------------------------------------------------------
+
 
 class TestScanHomeSingleFiles:
     """Verifica la logica di inclusione dei file singoli."""
@@ -181,6 +196,7 @@ class TestScanHomeSingleFiles:
 # Test: scan_home — directory incluse
 # ---------------------------------------------------------------------------
 
+
 class TestScanHomeDirectories:
     """Verifica che le directory dot vengano incluse correttamente."""
 
@@ -216,6 +232,7 @@ class TestScanHomeDirectories:
 # Test: scan_home — .config
 # ---------------------------------------------------------------------------
 
+
 class TestScanHomeConfig:
     """Verifica scansione di ~/.config."""
 
@@ -243,7 +260,9 @@ class TestScanHomeConfig:
         config_entries = [e for e in entries if e.source == "config"]
         assert len(config_entries) > 0
         for e in config_entries:
-            assert "config" in str(e.path), f"Path di {e.name} dovrebbe contenere .config"
+            assert "config" in str(
+                e.path
+            ), f"Path di {e.name} dovrebbe contenere .config"
 
     def test_all_config_system_exclude_respected(self, tmp_path: Path) -> None:
         """Nessuna voce da CONFIG_SYSTEM_EXCLUDE appare da ~/.config."""
@@ -256,12 +275,15 @@ class TestScanHomeConfig:
         entries = scan_home(home=home)
         result_names = {e.name for e in entries}
         for excluded in CONFIG_SYSTEM_EXCLUDE:
-            assert excluded not in result_names, f"{excluded} non dovrebbe essere nei risultati"
+            assert (
+                excluded not in result_names
+            ), f"{excluded} non dovrebbe essere nei risultati"
 
 
 # ---------------------------------------------------------------------------
 # Test: scan_home — broken symlink
 # ---------------------------------------------------------------------------
+
 
 class TestScanHomeBrokenSymlink:
     """Verifica che i symlink rotti vengano ignorati."""
@@ -293,6 +315,7 @@ class TestScanHomeBrokenSymlink:
 # ---------------------------------------------------------------------------
 # Test: scan_home — dimensioni
 # ---------------------------------------------------------------------------
+
 
 class TestScanHomeSizes:
     """Verifica il calcolo delle dimensioni."""
@@ -335,6 +358,7 @@ class TestScanHomeSizes:
 # ---------------------------------------------------------------------------
 # Test: scan_home — campi DotEntry
 # ---------------------------------------------------------------------------
+
 
 class TestScanHomeDotEntryFields:
     """Verifica i campi dei DotEntry restituiti da scan_home."""

@@ -20,7 +20,7 @@ ALWAYS_EXCLUDE: frozenset[str] = frozenset(
         ".cache",
         ".dbus",
         ".gvfs",
-        ".local",        # gestito separatamente se necessario
+        ".local",  # gestito separatamente se necessario
         ".Trash",
         ".Trash-1000",
         ".thumbnails",
@@ -52,9 +52,9 @@ ALWAYS_EXCLUDE: frozenset[str] = frozenset(
         ".face.icon",
         ".ecryptfs",
         ".Private",
-        ".ssh",          # sicurezza: non toccare mai ssh
-        ".gnupg",        # sicurezza: non toccare mai gnupg/gpg
-        ".pki",          # certificati
+        ".ssh",  # sicurezza: non toccare mai ssh
+        ".gnupg",  # sicurezza: non toccare mai gnupg/gpg
+        ".pki",  # certificati
     }
 )
 
@@ -62,32 +62,32 @@ ALWAYS_EXCLUDE: frozenset[str] = frozenset(
 # e la loro rimozione causerebbe danni (perdita shortcut, impostazioni display, ecc.)
 CONFIG_SYSTEM_EXCLUDE: frozenset[str] = frozenset(
     {
-        "autostart",        # file .desktop di autostart
-        "dconf",            # database GNOME/GTK settings (binario)
-        "fontconfig",       # cache font sistema
-        "menus",            # menu applicazioni XDG
+        "autostart",  # file .desktop di autostart
+        "dconf",  # database GNOME/GTK settings (binario)
+        "fontconfig",  # cache font sistema
+        "menus",  # menu applicazioni XDG
         "plasma-localerc",  # impostazioni locale KDE
-        "plasma-nm",        # NetworkManager Plasma applet
+        "plasma-nm",  # NetworkManager Plasma applet
         "plasma-org.kde.plasma.desktop-appletsrc",  # layout desktop
-        "session",          # sessioni desktop
-        "Trolltech.conf",   # Qt framework config
-        "QtProject.conf",   # Qt framework config
-        "mimeapps.list",    # associazioni file MIME (sistema)
-        "user-dirs.dirs",   # directory XDG utente
-        "user-dirs.locale", # locale directory XDG
+        "session",  # sessioni desktop
+        "Trolltech.conf",  # Qt framework config
+        "QtProject.conf",  # Qt framework config
+        "mimeapps.list",  # associazioni file MIME (sistema)
+        "user-dirs.dirs",  # directory XDG utente
+        "user-dirs.locale",  # locale directory XDG
         "xdg-mimeapps.list",
-        "ibus",             # input method
-        "gtk-3.0",          # temi GTK3 (modificati dall'utente/sistema)
-        "gtk-4.0",          # temi GTK4
-        "pulse",            # PulseAudio
-        "systemd",          # servizi utente systemd
-        "environment.d",    # variabili ambiente systemd
-        "procps",           # configurazione procps
-        "htop",             # htop config (piccolo, inutile da rimuovere)
-        "libaccounts-glib", # accounts SSO
-        "goa-1.0",          # GNOME Online Accounts
-        "enchant",          # dizionari spell check
-        "libreoffice",      # LibreOffice: gestito separatamente nel DB
+        "ibus",  # input method
+        "gtk-3.0",  # temi GTK3 (modificati dall'utente/sistema)
+        "gtk-4.0",  # temi GTK4
+        "pulse",  # PulseAudio
+        "systemd",  # servizi utente systemd
+        "environment.d",  # variabili ambiente systemd
+        "procps",  # configurazione procps
+        "htop",  # htop config (piccolo, inutile da rimuovere)
+        "libaccounts-glib",  # accounts SSO
+        "goa-1.0",  # GNOME Online Accounts
+        "enchant",  # dizionari spell check
+        "libreoffice",  # LibreOffice: gestito separatamente nel DB
     }
 )
 

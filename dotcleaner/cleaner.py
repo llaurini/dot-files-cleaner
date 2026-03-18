@@ -23,6 +23,7 @@ HAS_SEND2TRASH: bool = False
 
 try:
     from send2trash import send2trash as _imported_send2trash
+
     _send2trash_fn = _imported_send2trash
     HAS_SEND2TRASH = True
 except ImportError:
@@ -35,6 +36,7 @@ _send2trash = _send2trash_fn
 
 class CleanError(Exception):
     """Errore durante l'eliminazione di un dot entry."""
+
     pass
 
 

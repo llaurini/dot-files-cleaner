@@ -11,7 +11,6 @@ Layout:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import ClassVar
 
@@ -21,7 +20,7 @@ from textual.binding import Binding
 from textual.containers import Center, Horizontal, Middle, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.reactive import reactive
-from textual.screen import ModalScreen, Screen
+from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     DataTable,
@@ -30,11 +29,10 @@ from textual.widgets import (
     Label,
     LoadingIndicator,
     Select,
-    Static,
 )
 
 from dotcleaner.checker import PackageChecker
-from dotcleaner.cleaner import CleanError, trash_entries
+from dotcleaner.cleaner import trash_entries
 from dotcleaner.mapper import map_entries
 from dotcleaner.scanner import DotEntry, scan_home
 
@@ -258,7 +256,9 @@ class ConfirmScreen(ModalScreen[bool]):
                 )
                 with Horizontal(id="confirm-buttons"):
                     yield Button("Annulla", variant="default", id="btn-cancel")
-                    yield Button("Sposta nel cestino", variant="error", id="btn-confirm")
+                    yield Button(
+                        "Sposta nel cestino", variant="error", id="btn-confirm"
+                    )
 
     @on(Button.Pressed, "#btn-cancel")
     def action_cancel(self) -> None:
@@ -288,7 +288,9 @@ class ResultScreen(ModalScreen[None]):
                 yield Label(title, id="result-title")
                 lines = []
                 if successes:
-                    lines.append(f"[green]Spostati nel cestino: {len(successes)}[/green]")
+                    lines.append(
+                        f"[green]Spostati nel cestino: {len(successes)}[/green]"
+                    )
                 if failures:
                     lines.append(f"[red]Errori: {len(failures)}[/red]")
                     for path, err in failures:
@@ -305,6 +307,7 @@ class ResultScreen(ModalScreen[None]):
 # ---------------------------------------------------------------------------
 # Main App
 # ---------------------------------------------------------------------------
+
 
 def _human_size(size: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
@@ -372,9 +375,11 @@ class DotCleanerApp(App[None]):
                 yield Label("", id="stats-label")
 
             with Vertical(id="table-container"):
-                table: DataTable[str] = DataTable(id="main-table", cursor_type="row", zebra_stripes=True)
+                table: DataTable[str] = DataTable(
+                    id="main-table", cursor_type="row", zebra_stripes=True
+                )
                 table.add_columns(
-                    "",           # checkbox
+                    "",  # checkbox
                     "Path",
                     "Tipo",
                     "Dimensione",
@@ -399,6 +404,7 @@ class DotCleanerApp(App[None]):
     @work(thread=True)
     def _load_data(self) -> None:
         """Carica i dati in un thread separato per non bloccare la UI."""
+
         def update_label(text: str) -> None:
             try:
                 lbl = self.query_one("#loading-screen Label", Label)
@@ -410,7 +416,9 @@ class DotCleanerApp(App[None]):
 
         # 1. Inizializza il checker e carica i pacchetti
         checker = PackageChecker()
-        self.call_from_thread(update_label, "Caricamento pacchetti Debian installati...")
+        self.call_from_thread(
+            update_label, "Caricamento pacchetti Debian installati..."
+        )
         checker.load()
 
         # 2. Scansiona la home
@@ -418,7 +426,9 @@ class DotCleanerApp(App[None]):
         entries = scan_home(self._home)
 
         # 3. Mappa i pacchetti
-        self.call_from_thread(update_label, f"Analisi di {len(entries)} elementi trovati...")
+        self.call_from_thread(
+            update_label, f"Analisi di {len(entries)} elementi trovati..."
+        )
         entries = map_entries(entries, checker)
 
         # 4. Aggiorna la UI nel thread principale
@@ -442,9 +452,13 @@ class DotCleanerApp(App[None]):
         if f == "all":
             self._filtered_entries = list(self._all_entries)
         elif f == "uninstalled":
-            self._filtered_entries = [e for e in self._all_entries if e.status == "uninstalled"]
+            self._filtered_entries = [
+                e for e in self._all_entries if e.status == "uninstalled"
+            ]
         elif f == "unknown":
-            self._filtered_entries = [e for e in self._all_entries if e.status == "unknown"]
+            self._filtered_entries = [
+                e for e in self._all_entries if e.status == "unknown"
+            ]
         elif f == "not_installed":
             self._filtered_entries = [
                 e for e in self._all_entries if e.status in ("uninstalled", "unknown")
@@ -454,7 +468,9 @@ class DotCleanerApp(App[None]):
 
         # Ordina: non installati prima, poi sconosciuti, poi installati
         STATUS_ORDER = {"uninstalled": 0, "unknown": 1, "installed": 2}
-        self._filtered_entries.sort(key=lambda e: (STATUS_ORDER.get(e.status, 9), e.name.lower()))
+        self._filtered_entries.sort(
+            key=lambda e: (STATUS_ORDER.get(e.status, 9), e.name.lower())
+        )
 
         self._rebuild_table()
         self._update_stats()
@@ -469,7 +485,11 @@ class DotCleanerApp(App[None]):
             selected = key in self._selected_paths
             checkbox = "[X]" if selected else "[ ]"
 
-            packages_str = ", ".join(entry.associated_packages) if entry.associated_packages else "-"
+            packages_str = (
+                ", ".join(entry.associated_packages)
+                if entry.associated_packages
+                else "-"
+            )
             if len(packages_str) > 35:
                 packages_str = packages_str[:32] + "..."
 
@@ -505,7 +525,9 @@ class DotCleanerApp(App[None]):
         unknown = sum(1 for e in self._all_entries if e.status == "unknown")
         selected = len(self._selected_paths)
 
-        selected_entries = [e for e in self._all_entries if str(e.path) in self._selected_paths]
+        selected_entries = [
+            e for e in self._all_entries if str(e.path) in self._selected_paths
+        ]
         selected_size = sum(e.size_bytes for e in selected_entries)
 
         stats = (
@@ -559,7 +581,9 @@ class DotCleanerApp(App[None]):
             self.notify("Nessun elemento selezionato.", severity="warning")
             return
 
-        to_delete = [e for e in self._all_entries if str(e.path) in self._selected_paths]
+        to_delete = [
+            e for e in self._all_entries if str(e.path) in self._selected_paths
+        ]
         if not to_delete:
             return
 
@@ -582,7 +606,9 @@ class DotCleanerApp(App[None]):
         # Rimuovi gli entry eliminati con successo
         removed_paths = {p for p, err in results.items() if err is None}
         self._selected_paths -= removed_paths
-        self._all_entries = [e for e in self._all_entries if str(e.path) not in removed_paths]
+        self._all_entries = [
+            e for e in self._all_entries if str(e.path) not in removed_paths
+        ]
         self._apply_filter()
 
         def close_result(_: None) -> None:

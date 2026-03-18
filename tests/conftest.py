@@ -17,6 +17,7 @@ from dotcleaner.scanner import DotEntry
 # Fixture: home directory fittizia
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def fake_home(tmp_path: Path) -> Path:
     """
@@ -66,8 +67,8 @@ def fake_home(tmp_path: Path) -> Path:
     config_dir.mkdir()
     (config_dir / "zoom").mkdir()
     (config_dir / "zoom" / "zoom.conf").write_text("zoom settings\n")
-    (config_dir / "htop").mkdir()        # esclusa da CONFIG_SYSTEM_EXCLUDE
-    (config_dir / "dconf").mkdir()       # esclusa da CONFIG_SYSTEM_EXCLUDE
+    (config_dir / "htop").mkdir()  # esclusa da CONFIG_SYSTEM_EXCLUDE
+    (config_dir / "dconf").mkdir()  # esclusa da CONFIG_SYSTEM_EXCLUDE
 
     return home
 
@@ -75,6 +76,7 @@ def fake_home(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Factory: DotEntry
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
@@ -84,6 +86,7 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
     Utilizzo:
         entry = make_entry(".zoom", is_dir=True, source="home_dot")
     """
+
     def _factory(
         name: str,
         *,
@@ -123,6 +126,7 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
 # ---------------------------------------------------------------------------
 # Fixture: PackageChecker mockato
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mock_checker() -> MagicMock:

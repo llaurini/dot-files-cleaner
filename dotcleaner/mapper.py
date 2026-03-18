@@ -152,7 +152,9 @@ def _lookup_database(normalized_name: str) -> list[str] | None:
                 if key in name_tokens or key in name_bigrams:
                     return packages
                 # Match se tutti i token della chiave sono presenti nel nome
-                if len(key_tokens) >= 2 and key_tokens.issubset(name_tokens | name_bigrams):
+                if len(key_tokens) >= 2 and key_tokens.issubset(
+                    name_tokens | name_bigrams
+                ):
                     return packages
 
     return None

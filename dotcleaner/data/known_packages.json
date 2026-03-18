@@ -5,14 +5,22 @@
 
   "abiword": ["abiword"],
   "akonadi": ["akonadi-server", "kdepim-runtime"],
-  "google-chrome": ["google-chrome-stable", "google-chrome-beta", "google-chrome-unstable"],
+  "google-chrome": [
+    "google-chrome-stable",
+    "google-chrome-beta",
+    "google-chrome-unstable"
+  ],
   "google-chrome-incognito": ["google-chrome-stable", "google-chrome-beta"],
   "icedtea-web": ["icedtea-netx"],
   "kajonggserver": ["kajongg"],
   "kfontinstuirc": ["plasma-workspace"],
   "konq-history": ["konqueror"],
   "konq_history": ["konqueror"],
-  "microsoft-edge": ["microsoft-edge-stable", "microsoft-edge-beta", "microsoft-edge-dev"],
+  "microsoft-edge": [
+    "microsoft-edge-stable",
+    "microsoft-edge-beta",
+    "microsoft-edge-dev"
+  ],
   "microsoft-edge-beta": ["microsoft-edge-beta", "microsoft-edge-stable"],
   "panel-colorizer": ["panel-colorizer"],
   "raspberry-pi": ["rpi-imager"],
@@ -107,7 +115,13 @@
   "dolphin": ["dolphin"],
   "dolphinrc": ["dolphin"],
   "dosbox": ["dosbox"],
-  "dotnet": ["dotnet-runtime-8.0", "dotnet-sdk-8.0", "dotnet6", "dotnet7", "dotnet8"],
+  "dotnet": [
+    "dotnet-runtime-8.0",
+    "dotnet-sdk-8.0",
+    "dotnet6",
+    "dotnet7",
+    "dotnet8"
+  ],
   "dragonplayer": ["dragonplayer"],
   "dragonplayerrc": ["dragonplayer"],
   "drkonqi": ["drkonqi"],
@@ -186,7 +200,13 @@
   "irssi": ["irssi"],
   "ipython": ["ipython3", "jupyter"],
   "iriun": ["iriun-webcam"],
-  "java": ["default-jre", "default-jdk", "openjdk-11-jdk", "openjdk-17-jdk", "openjdk-21-jdk"],
+  "java": [
+    "default-jre",
+    "default-jdk",
+    "openjdk-11-jdk",
+    "openjdk-17-jdk",
+    "openjdk-21-jdk"
+  ],
   "jetbrains": ["jetbrains-toolbox"],
   "john": ["john"],
   "julia": ["julia"],

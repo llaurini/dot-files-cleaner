@@ -11,11 +11,9 @@ Il PackageChecker è sempre mockato per evitare dipendenza da dpkg reale.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Callable
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from dotcleaner.mapper import _derive_variants, _normalize, map_entries
 from dotcleaner.scanner import DotEntry
@@ -24,6 +22,7 @@ from dotcleaner.scanner import DotEntry
 # ---------------------------------------------------------------------------
 # Test: _normalize
 # ---------------------------------------------------------------------------
+
 
 class TestNormalize:
     """Test della funzione _normalize."""
@@ -54,6 +53,7 @@ class TestNormalize:
 # ---------------------------------------------------------------------------
 # Test: _derive_variants
 # ---------------------------------------------------------------------------
+
 
 class TestDeriveVariants:
     """Test della funzione _derive_variants."""
@@ -114,12 +114,15 @@ class TestDeriveVariants:
 # Test: map_entries — fase database
 # ---------------------------------------------------------------------------
 
+
 class TestMapEntriesDatabase:
     """
     Testa la fase 1 (database): entry con nomi presenti in known_packages.json.
     """
 
-    def test_vim_mapped_from_database(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_vim_mapped_from_database(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """'.vim' deve essere trovato nel database e mappato a 'vim'."""
         mock_checker.check_packages.side_effect = lambda pkgs: (
             [p for p in pkgs if p == "vim"],
@@ -130,13 +133,17 @@ class TestMapEntriesDatabase:
         assert entry.associated_packages, "vim dovrebbe avere pacchetti associati"
         assert entry.match_source in ("database", "heuristic")
 
-    def test_zsh_mapped_from_database(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_zsh_mapped_from_database(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """'.zsh' deve essere trovato nel database."""
         entry = make_entry(".zsh")
         entries = map_entries([entry], mock_checker)
         assert entry.associated_packages
 
-    def test_known_entry_sets_match_source_database(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_known_entry_sets_match_source_database(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Un'entry trovata nel DB ha match_source='database'."""
         entry = make_entry(".zoom")
         mock_checker.check_packages.return_value = ([], ["zoom"])
@@ -144,7 +151,9 @@ class TestMapEntriesDatabase:
         # zoom è nel database con pacchetti ["zoom", ...]
         assert entry.match_source == "database"
 
-    def test_unknown_entry_sets_match_source_unknown(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_unknown_entry_sets_match_source_unknown(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Un'entry non trovata ha match_source='unknown'."""
         # Nome che sicuramente non è nel DB né nell'euristica
         entry = make_entry(".xyzzy-not-a-real-app-12345")
@@ -155,7 +164,9 @@ class TestMapEntriesDatabase:
         assert entry.match_source == "unknown"
         assert entry.associated_packages == []
 
-    def test_database_entry_with_installed_package(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_database_entry_with_installed_package(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Un'entry DB con pacchetto installato ha status='installed'."""
         entry = make_entry(".vim")
         # vim è installato
@@ -166,7 +177,9 @@ class TestMapEntriesDatabase:
         map_entries([entry], mock_checker)
         assert entry.status == "installed"
 
-    def test_database_entry_with_uninstalled_package(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_database_entry_with_uninstalled_package(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Un'entry DB con tutti i pacchetti non installati ha status='uninstalled'."""
         entry = make_entry(".zoom")
         # zoom non è installato
@@ -177,7 +190,9 @@ class TestMapEntriesDatabase:
         # zoom è nel db, ma nessuno installato
         assert entry.status == "uninstalled"
 
-    def test_rc_variant_maps_to_database(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_rc_variant_maps_to_database(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """'.konsolerc' deve usare la variante 'konsole' per trovare il DB."""
         entry = make_entry(".konsolerc")
         mock_checker.check_packages.return_value = ([], ["konsole"])
@@ -185,14 +200,18 @@ class TestMapEntriesDatabase:
         # konsole deve essere trovato via _derive_variants
         assert entry.associated_packages
 
-    def test_config_entry_mapped(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_config_entry_mapped(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Entry da ~/.config con source='config' viene mappata correttamente."""
         entry = make_entry("zoom", is_dir=True, source="config")
         mock_checker.check_packages.return_value = ([], ["zoom"])
         map_entries([entry], mock_checker)
         assert entry.associated_packages
 
-    def test_multiple_entries_all_mapped(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_multiple_entries_all_mapped(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """map_entries processa tutte le entry della lista."""
         entries = [
             make_entry(".vim"),
@@ -203,7 +222,9 @@ class TestMapEntriesDatabase:
         results = map_entries(entries, mock_checker)
         assert len(results) == 3
 
-    def test_returns_same_list(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_returns_same_list(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """map_entries ritorna la stessa lista modificata in-place."""
         entries = [make_entry(".vim")]
         result = map_entries(entries, mock_checker)
@@ -214,10 +235,13 @@ class TestMapEntriesDatabase:
 # Test: map_entries — fase euristica
 # ---------------------------------------------------------------------------
 
+
 class TestMapEntriesHeuristic:
     """Testa la fase 2 (euristica): .desktop e dpkg diretti."""
 
-    def test_heuristic_finds_installed_package_by_name(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_heuristic_finds_installed_package_by_name(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Se il nome è un pacchetto dpkg installato, viene trovato via euristica."""
         entry = make_entry(".tmux")
         # tmux è nel mock_checker come installato
@@ -232,7 +256,9 @@ class TestMapEntriesHeuristic:
         # Può essere trovato sia da DB che da euristica
         assert entry.associated_packages or entry.status == "unknown"
 
-    def test_heuristic_sets_match_source(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_heuristic_sets_match_source(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Se trovato via euristica, match_source è 'heuristic'."""
         # Usa un nome che non è nel DB ma è un pacchetto installato
         entry = make_entry(".my-custom-app-99")
@@ -255,10 +281,13 @@ class TestMapEntriesHeuristic:
 # Test: map_entries — installed/uninstalled_packages
 # ---------------------------------------------------------------------------
 
+
 class TestMapEntriesPackageFields:
     """Verifica che i campi installed/uninstalled_packages siano popolati."""
 
-    def test_installed_packages_populated(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_installed_packages_populated(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """installed_packages viene popolato dal checker."""
         entry = make_entry(".vim")
         mock_checker.check_packages.side_effect = lambda pkgs: (
@@ -270,7 +299,9 @@ class TestMapEntriesPackageFields:
             assert isinstance(entry.installed_packages, list)
             assert isinstance(entry.uninstalled_packages, list)
 
-    def test_empty_associated_packages_means_empty_installed(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_empty_associated_packages_means_empty_installed(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """Se associated_packages è vuoto, installed e uninstalled sono vuoti."""
         entry = make_entry(".xyzzy-not-a-real-app-12345")
         mock_checker.find_matching_packages.return_value = []
@@ -281,7 +312,9 @@ class TestMapEntriesPackageFields:
         assert entry.installed_packages == []
         assert entry.uninstalled_packages == []
 
-    def test_check_packages_called_with_associated(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_check_packages_called_with_associated(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """check_packages viene chiamato con i pacchetti associati."""
         entry = make_entry(".zoom")
         called_with: list[list[str]] = []
@@ -297,7 +330,9 @@ class TestMapEntriesPackageFields:
             assert len(called_with) == 1
             assert set(called_with[0]) == set(entry.associated_packages)
 
-    def test_installed_packages_is_subset_of_associated(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_installed_packages_is_subset_of_associated(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """installed_packages è sempre un sottoinsieme di associated_packages."""
         entry = make_entry(".zoom")
         mock_checker.check_packages.return_value = ([], ["zoom"])
@@ -305,7 +340,9 @@ class TestMapEntriesPackageFields:
         for pkg in entry.installed_packages:
             assert pkg in entry.associated_packages
 
-    def test_uninstalled_packages_is_subset_of_associated(self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock) -> None:
+    def test_uninstalled_packages_is_subset_of_associated(
+        self, make_entry: Callable[..., DotEntry], mock_checker: MagicMock
+    ) -> None:
         """uninstalled_packages è sempre un sottoinsieme di associated_packages."""
         entry = make_entry(".zoom")
         mock_checker.check_packages.return_value = ([], ["zoom"])

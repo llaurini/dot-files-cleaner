@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-from functools import lru_cache
 
 
 class PackageChecker:
@@ -48,7 +47,11 @@ class PackageChecker:
                 if status_line.endswith("installed") and pkg_name:
                     packages.add(pkg_name.lower())
                 i += 2
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.SubprocessError,
+        ):
             # dpkg non disponibile: fallback vuoto
             pass
 
@@ -67,7 +70,11 @@ class PackageChecker:
                         # Rimuovi l'eventuale ':arch' suffix
                         pkg = parts[0].split(":")[0].lower()
                         packages.add(pkg)
-            except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+            except (
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+                subprocess.SubprocessError,
+            ):
                 pass
 
         self._installed = frozenset(packages)
