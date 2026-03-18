@@ -1,11 +1,10 @@
-"""
-scanner.py - Scansione della home directory alla ricerca di dot files e directory.
+"""Home-directory scanner for dot files and configuration directories.
 
-Scansiona:
-  - ~/.*  (file e directory al primo livello che iniziano con '.')
-  - ~/.config/*  (primo livello di subdirectory/file dentro .config)
+Scans:
+  - ~/.*  (first-level entries starting with '.')
+  - ~/.config/*  (first level of subdirectories/files inside .config)
 
-Per le directory, calcola la dimensione totale ricorsiva.
+For directories, calculates the total recursive size.
 """
 
 from __future__ import annotations
@@ -114,7 +113,20 @@ INCLUDE_SINGLE_FILES: frozenset[str] = frozenset(
 
 @dataclass
 class DotEntry:
-    """Rappresenta un dot file o directory trovato nella home."""
+    """A dot file or directory found inside the home directory.
+
+    Attributes:
+        path: Absolute path to the filesystem entry.
+        name: Filename of the entry (e.g. '.vim').
+        is_dir: True if the entry is a directory.
+        size_bytes: Total size in bytes (recursive for directories).
+        source: Origin of the scan, either 'home_dot' or 'config'.
+        associated_packages: Debian packages that own this entry.
+        match_source: How the package was found: 'database', 'heuristic',
+            or 'unknown'.
+        installed_packages: Subset of associated_packages that are installed.
+        uninstalled_packages: Subset of associated_packages that are not installed.
+    """
 
     path: Path
     name: str
@@ -132,7 +144,12 @@ class DotEntry:
 
     @property
     def display_path(self) -> str:
-        """Ritorna il path relativo alla home."""
+        """Return the path relative to the current user's home directory.
+
+        Returns:
+            A string like '~/.vim'.  Falls back to the absolute path string
+            if the entry is not under the home directory.
+        """
         home = Path.home()
         try:
             return "~/" + str(self.path.relative_to(home))
@@ -141,11 +158,12 @@ class DotEntry:
 
     @property
     def status(self) -> str:
-        """
-        Ritorna lo stato del dot entry:
-        - 'installed'   : almeno un pacchetto associato è installato
-        - 'uninstalled' : pacchetti trovati ma nessuno installato
-        - 'unknown'     : nessun pacchetto associato trovato
+        """Return the installation status of this dot entry.
+
+        Returns:
+            'installed' if at least one associated package is installed,
+            'uninstalled' if packages were found but none is installed,
+            'unknown' if no associated packages were found.
         """
         if not self.associated_packages:
             return "unknown"
@@ -155,7 +173,11 @@ class DotEntry:
 
     @property
     def size_human(self) -> str:
-        """Dimensione human-readable."""
+        """Return a human-readable representation of the entry size.
+
+        Returns:
+            A string such as '1.5 MB' or '300.0 B'.
+        """
         size = self.size_bytes
         for unit in ("B", "KB", "MB", "GB"):
             if size < 1024:
@@ -165,7 +187,17 @@ class DotEntry:
 
 
 def _dir_size(path: Path) -> int:
-    """Calcola la dimensione totale ricorsiva di una directory in bytes."""
+    """Compute the total recursive size of a directory in bytes.
+
+    Symlinks are counted by their own lstat size, not the target size.
+    Unreadable entries are silently skipped.
+
+    Args:
+        path: The directory whose size should be computed.
+
+    Returns:
+        Total size in bytes, or 0 if the directory is unreadable.
+    """
     total = 0
     try:
         for entry in os.scandir(path):
@@ -184,7 +216,14 @@ def _dir_size(path: Path) -> int:
 
 
 def _entry_size(path: Path) -> int:
-    """Dimensione di un file o di una directory (ricorsiva)."""
+    """Return the size in bytes of a file or directory (recursive).
+
+    Args:
+        path: The filesystem path to measure.
+
+    Returns:
+        Size in bytes, or 0 if the path is unreadable.
+    """
     try:
         if path.is_symlink():
             return path.lstat().st_size
@@ -196,14 +235,22 @@ def _entry_size(path: Path) -> int:
 
 
 def scan_home(home: Path | None = None) -> list[DotEntry]:
-    """
-    Scansiona la home directory e ritorna tutti i dot entries trovati.
+    """Scan the home directory and return all discovered dot entries.
+
+    Covers two locations:
+    - ``~/.*``      — first-level entries starting with '.'
+    - ``~/.config/*`` — first-level entries inside ``.config``
+
+    Entries listed in ``ALWAYS_EXCLUDE`` or ``CONFIG_SYSTEM_EXCLUDE`` are
+    skipped.  Plain files are only included if they appear in
+    ``INCLUDE_SINGLE_FILES``.  Broken symlinks are always ignored.
 
     Args:
-        home: Percorso della home directory. Se None, usa Path.home().
+        home: Path to the home directory to scan.  Defaults to
+            ``Path.home()`` when ``None``.
 
     Returns:
-        Lista di DotEntry ordinata per status (uninstalled prima) e poi per nome.
+        List of ``DotEntry`` objects, one per discovered filesystem entry.
     """
     if home is None:
         home = Path.home()

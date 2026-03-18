@@ -1,10 +1,8 @@
-"""
-checker.py - Verifica quali pacchetti Debian sono installati nel sistema.
+"""Package-installation checker for Debian/Ubuntu systems.
 
-Carica l'elenco completo dei pacchetti installati tramite dpkg-query una sola volta,
-e offre un metodo rapido per controllare se un dato pacchetto è installato.
-Come fallback per pacchetti non-dpkg (snap, AppImage, pip, ecc.)
-verifica anche la presenza del binario nel PATH tramite 'which'.
+Loads the full list of installed packages once via ``dpkg-query``, then
+offers O(1) membership tests.  Falls back to ``shutil.which`` for packages
+distributed as snap, flatpak, or AppImage that are not tracked by dpkg.
 """
 
 from __future__ import annotations
@@ -15,16 +13,28 @@ import subprocess
 
 
 class PackageChecker:
-    """Gestisce la verifica dei pacchetti installati."""
+    """Verify which Debian packages are installed on the current system.
+
+    The package list is loaded lazily on first access and cached for the
+    lifetime of the instance.  Use ``get_checker()`` to obtain a process-wide
+    singleton.
+    """
 
     def __init__(self) -> None:
+        """Initialise PackageChecker with an empty, unloaded package set."""
         self._installed: frozenset[str] = frozenset()
         self._loaded = False
 
     def load(self) -> None:
-        """
-        Carica tutti i pacchetti installati tramite dpkg-query.
-        Deve essere chiamato una volta prima di usare is_installed().
+        r"""Load all installed packages via dpkg-query.
+
+        Tries ``dpkg-query -f ${Package}\n${Status}\n -W *`` first, then
+        falls back to ``dpkg --get-selections`` if the first command returns
+        no results.  Errors (missing binary, timeout) are silently ignored and
+        result in an empty package set.
+
+        Returns:
+            None.
         """
         packages: set[str] = set()
 
@@ -82,49 +92,55 @@ class PackageChecker:
 
     @property
     def installed_packages(self) -> frozenset[str]:
-        """Set di tutti i pacchetti installati (nomi in lowercase)."""
+        """Return the set of all installed package names in lowercase.
+
+        Triggers ``load()`` automatically on first access if the package list
+        has not been loaded yet.
+
+        Returns:
+            A frozenset of lowercase package name strings.
+        """
         if not self._loaded:
             self.load()
         return self._installed
 
     def is_installed_dpkg(self, package_name: str) -> bool:
-        """
-        Controlla se il pacchetto è installato tramite dpkg.
+        """Check whether a package is installed according to dpkg.
 
         Args:
-            package_name: Nome del pacchetto Debian (case-insensitive).
+            package_name: Debian package name to look up (case-insensitive).
 
         Returns:
-            True se il pacchetto è installato.
+            True if the package is currently installed.
         """
         return package_name.lower() in self.installed_packages
 
     def is_binary_available(self, binary_name: str) -> bool:
-        """
-        Controlla se un binario è disponibile nel PATH di sistema.
-        Utile come fallback per snap, AppImage, ecc.
+        """Check whether a binary is available on the system PATH.
+
+        Useful as a fallback for snap, AppImage, and other non-dpkg
+        distributions.
 
         Args:
-            binary_name: Nome del binario (es. 'firefox', 'code').
+            binary_name: Binary name to search for (e.g. 'firefox', 'code').
 
         Returns:
-            True se il binario è trovato nel PATH.
+            True if the binary is found anywhere on PATH.
         """
         return shutil.which(binary_name) is not None
 
     def check_packages(self, package_names: list[str]) -> tuple[list[str], list[str]]:
-        """
-        Data una lista di nomi di pacchetti, ritorna (installati, non_installati).
+        """Split a list of package names into installed and uninstalled groups.
 
-        Strategia:
-        1. Controlla prima tramite dpkg
-        2. Se non trovato via dpkg, controlla se esiste il binario nel PATH
+        Each name is checked first via dpkg, then via binary availability on
+        PATH (snap/flatpak/AppImage fallback).
 
         Args:
-            package_names: Lista di nomi di pacchetti da controllare.
+            package_names: List of Debian package names to check.
 
         Returns:
-            Tupla (installed, uninstalled) con le liste di pacchetti.
+            A tuple ``(installed, uninstalled)`` containing two lists of
+            package names.
         """
         installed: list[str] = []
         uninstalled: list[str] = []
@@ -142,15 +158,17 @@ class PackageChecker:
         return installed, uninstalled
 
     def find_matching_packages(self, name: str) -> list[str]:
-        """
-        Cerca pacchetti installati il cui nome contiene 'name' come sottostringa.
-        Utile per l'euristica nel mapper.
+        """Find installed packages whose name contains *name* as a token.
+
+        Uses token-level matching (splitting on ``-``, ``_``, ``.``) to avoid
+        false positives such as matching 'micro' inside 'microsoft-edge-beta'.
 
         Args:
-            name: Stringa da cercare nei nomi dei pacchetti.
+            name: Token string to search for among installed package names.
 
         Returns:
-            Lista di pacchetti installati che contengono 'name' nel nome.
+            Sorted list of installed packages that contain *name* as an exact
+            token or as the base (first) token of their name.
         """
         name_lower = name.lower()
         matches = []
@@ -169,7 +187,14 @@ _checker: PackageChecker | None = None
 
 
 def get_checker() -> PackageChecker:
-    """Ritorna l'istanza singleton di PackageChecker."""
+    """Return the process-wide singleton instance of PackageChecker.
+
+    Creates the instance on first call; subsequent calls return the same
+    object without reloading the package list.
+
+    Returns:
+        The singleton ``PackageChecker`` instance.
+    """
     global _checker
     if _checker is None:
         _checker = PackageChecker()

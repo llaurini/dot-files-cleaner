@@ -1,12 +1,11 @@
-"""
-app.py - Interfaccia TUI con Textual per dot-net-files-cleaner.
+"""Textual TUI for dot-net-files-cleaner.
 
 Layout:
-  - Header con titolo e filtri attivi
-  - DataTable principale con tutti i dot entries
-  - Footer con shortcuts da tastiera
-  - Dialog di conferma prima di eliminare
-  - Schermata di caricamento iniziale
+  - Header with title and active filter
+  - DataTable listing all dot entries
+  - Footer with keyboard shortcuts
+  - Confirmation dialog before trashing entries
+  - Initial loading screen while scanning runs in a background thread
 """
 
 from __future__ import annotations
@@ -222,7 +221,11 @@ TYPE_LABELS: dict[bool, str] = {
 
 
 class ConfirmScreen(ModalScreen[bool]):
-    """Dialog di conferma prima di eliminare."""
+    """Modal dialog asking the user to confirm a trash operation.
+
+    Displays the list of entries to be deleted and their total size.
+    Resolves with ``True`` if the user confirms, ``False`` if cancelled.
+    """
 
     BINDINGS = [
         Binding("escape", "cancel", "Annulla"),
@@ -230,10 +233,20 @@ class ConfirmScreen(ModalScreen[bool]):
     ]
 
     def __init__(self, entries: list[DotEntry]) -> None:
+        """Initialise ConfirmScreen with the entries to be trashed.
+
+        Args:
+            entries: List of ``DotEntry`` objects pending deletion.
+        """
         super().__init__()
         self.entries = entries
 
     def compose(self) -> ComposeResult:
+        """Build the confirmation dialog layout.
+
+        Returns:
+            A generator of Textual widgets forming the dialog.
+        """
         total_size = sum(e.size_bytes for e in self.entries)
         size_human = _human_size(total_size)
 
@@ -262,23 +275,48 @@ class ConfirmScreen(ModalScreen[bool]):
 
     @on(Button.Pressed, "#btn-cancel")
     def action_cancel(self) -> None:
+        """Dismiss the dialog with False when the Cancel button is pressed.
+
+        Returns:
+            None.
+        """
         self.dismiss(False)
 
     @on(Button.Pressed, "#btn-confirm")
     def action_confirm(self) -> None:
+        """Dismiss the dialog with True when the Confirm button is pressed.
+
+        Returns:
+            None.
+        """
         self.dismiss(True)
 
 
 class ResultScreen(ModalScreen[None]):
-    """Dialog che mostra il risultato dell'operazione."""
+    """Modal dialog that displays the outcome of a trash operation.
+
+    Shows a count of successes and, when present, a list of failures with
+    their error messages.
+    """
 
     BINDINGS = [Binding("escape,enter,q", "close", "Chiudi")]
 
     def __init__(self, results: dict[str, str | None]) -> None:
+        """Initialise ResultScreen with the trash-operation results.
+
+        Args:
+            results: Mapping of ``{path_str: error_message | None}`` as
+                returned by ``trash_entries()``.
+        """
         super().__init__()
         self.results = results
 
     def compose(self) -> ComposeResult:
+        """Build the result dialog layout.
+
+        Returns:
+            A generator of Textual widgets forming the result dialog.
+        """
         successes = [p for p, e in self.results.items() if e is None]
         failures = [(p, e) for p, e in self.results.items() if e is not None]
 
@@ -301,6 +339,11 @@ class ResultScreen(ModalScreen[None]):
 
     @on(Button.Pressed, "#btn-close")
     def action_close(self) -> None:
+        """Dismiss the result dialog when the Close button is pressed.
+
+        Returns:
+            None.
+        """
         self.dismiss(None)
 
 
@@ -310,6 +353,14 @@ class ResultScreen(ModalScreen[None]):
 
 
 def _human_size(size: int) -> str:
+    """Convert a byte count to a human-readable size string.
+
+    Args:
+        size: Size in bytes.
+
+    Returns:
+        A formatted string such as ``'1.5 MB'`` or ``'300.0 B'``.
+    """
     for unit in ("B", "KB", "MB", "GB"):
         if size < 1024:
             return f"{size:.1f} {unit}"
@@ -318,7 +369,12 @@ def _human_size(size: int) -> str:
 
 
 class DotCleanerApp(App[None]):
-    """Applicazione principale dot-net-files-cleaner."""
+    """Main Textual application for dot-net-files-cleaner.
+
+    Displays a filterable DataTable of dot entries with their associated
+    Debian packages and installation status.  Allows selecting entries and
+    moving them to the FreeDesktop trash.
+    """
 
     TITLE = "dot-net-files-cleaner"
     SUB_TITLE = "Pulizia dei dot files orfani"
@@ -341,6 +397,12 @@ class DotCleanerApp(App[None]):
     _selected_keys: reactive[set[str]] = reactive(set, init=False)
 
     def __init__(self, home: Path | None = None) -> None:
+        """Initialise DotCleanerApp.
+
+        Args:
+            home: Home directory to scan.  Defaults to ``Path.home()`` when
+                ``None``.
+        """
         super().__init__()
         self._home = home or Path.home()
         self._all_entries: list[DotEntry] = []
@@ -353,6 +415,11 @@ class DotCleanerApp(App[None]):
     # ------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
+        """Build the main application layout with loading and main screens.
+
+        Returns:
+            A generator of Textual widgets for the full application layout.
+        """
         yield Header(show_clock=True)
 
         # Schermata di caricamento (visibile all'avvio)
@@ -396,6 +463,11 @@ class DotCleanerApp(App[None]):
     # ------------------------------------------------------------------
 
     def on_mount(self) -> None:
+        """Hide the main screen and start background data loading on mount.
+
+        Returns:
+            None.
+        """
         # Nascondi la main screen e mostra il loading
         self.query_one("#main-screen").display = False
         self.query_one("#loading-screen").display = True
@@ -403,9 +475,27 @@ class DotCleanerApp(App[None]):
 
     @work(thread=True)
     def _load_data(self) -> None:
-        """Carica i dati in un thread separato per non bloccare la UI."""
+        """Load scan data in a background thread to keep the UI responsive.
+
+        Steps performed:
+        1. Initialise ``PackageChecker`` and load installed packages.
+        2. Scan the home directory with ``scan_home``.
+        3. Map entries to packages with ``map_entries``.
+        4. Schedule ``_on_data_loaded`` on the main thread.
+
+        Returns:
+            None.
+        """
 
         def update_label(text: str) -> None:
+            """Update the loading-screen status label from any thread.
+
+            Args:
+                text: New label text to display.
+
+            Returns:
+                None.
+            """
             try:
                 lbl = self.query_one("#loading-screen Label", Label)
                 lbl.update(text)
@@ -436,7 +526,11 @@ class DotCleanerApp(App[None]):
         self.call_from_thread(self._on_data_loaded)
 
     def _on_data_loaded(self) -> None:
-        """Chiamata dal thread principale quando i dati sono pronti."""
+        """Switch from the loading screen to the main screen once data is ready.
+
+        Returns:
+            None.
+        """
         self._is_loading = False
         self.query_one("#loading-screen").display = False
         self.query_one("#main-screen").display = True
@@ -447,7 +541,14 @@ class DotCleanerApp(App[None]):
     # ------------------------------------------------------------------
 
     def _apply_filter(self) -> None:
-        """Applica il filtro corrente e ridisegna la tabella."""
+        """Apply the current filter to the entry list and refresh the table.
+
+        Entries are sorted uninstalled-first, then unknown, then installed.
+        Calls ``_rebuild_table`` and ``_update_stats`` after filtering.
+
+        Returns:
+            None.
+        """
         f = self._current_filter
         if f == "all":
             self._filtered_entries = list(self._all_entries)
@@ -476,7 +577,11 @@ class DotCleanerApp(App[None]):
         self._update_stats()
 
     def _rebuild_table(self) -> None:
-        """Svuota e ricostruisce la DataTable con gli entries filtrati."""
+        """Clear and repopulate the DataTable from the filtered entry list.
+
+        Returns:
+            None.
+        """
         table = self.query_one("#main-table", DataTable)
         table.clear()
 
@@ -519,7 +624,11 @@ class DotCleanerApp(App[None]):
             )
 
     def _update_stats(self) -> None:
-        """Aggiorna la label con le statistiche."""
+        """Refresh the statistics label in the toolbar.
+
+        Returns:
+            None.
+        """
         total = len(self._all_entries)
         uninstalled = sum(1 for e in self._all_entries if e.status == "uninstalled")
         unknown = sum(1 for e in self._all_entries if e.status == "unknown")
@@ -549,7 +658,11 @@ class DotCleanerApp(App[None]):
     # ------------------------------------------------------------------
 
     def action_toggle_row(self) -> None:
-        """Seleziona/deseleziona la riga corrente."""
+        """Toggle the selection state of the currently focused table row.
+
+        Returns:
+            None.
+        """
         table = self.query_one("#main-table", DataTable)
         if table.cursor_row < 0 or table.cursor_row >= len(self._filtered_entries):
             return
@@ -568,7 +681,11 @@ class DotCleanerApp(App[None]):
             pass
 
     def action_select_uninstalled(self) -> None:
-        """Seleziona tutti gli elementi non installati."""
+        """Select all currently visible uninstalled and unknown entries.
+
+        Returns:
+            None.
+        """
         for entry in self._filtered_entries:
             if entry.status in ("uninstalled", "unknown"):
                 self._selected_paths.add(str(entry.path))
@@ -576,7 +693,13 @@ class DotCleanerApp(App[None]):
         self._update_stats()
 
     def action_delete_selected(self) -> None:
-        """Elimina tutti gli elementi selezionati."""
+        """Open the confirmation dialog and trash the selected entries on confirm.
+
+        Shows a warning notification if nothing is selected.
+
+        Returns:
+            None.
+        """
         if not self._selected_paths:
             self.notify("Nessun elemento selezionato.", severity="warning")
             return
@@ -588,6 +711,14 @@ class DotCleanerApp(App[None]):
             return
 
         def handle_confirm(confirmed: bool | None) -> None:
+            """Proceed with trashing if the user confirmed.
+
+            Args:
+                confirmed: ``True`` if the user clicked Confirm, else falsy.
+
+            Returns:
+                None.
+            """
             if confirmed:
                 self._do_trash(to_delete)
 
@@ -595,14 +726,33 @@ class DotCleanerApp(App[None]):
 
     @work(thread=True)
     def _do_trash(self, entries: list[DotEntry]) -> None:
-        """Esegue l'eliminazione nel cestino in un thread separato."""
+        """Move the given entries to the trash in a background thread.
+
+        Args:
+            entries: List of ``DotEntry`` objects to trash.
+
+        Returns:
+            None.
+        """
         results = trash_entries(entries)
         self.call_from_thread(self._after_trash, entries, results)
 
     def _after_trash(
         self, entries: list[DotEntry], results: dict[str, str | None]
     ) -> None:
-        """Aggiorna lo stato dopo l'eliminazione."""
+        """Update the application state after a trash operation completes.
+
+        Removes successfully trashed entries from the internal list, refreshes
+        the table, and shows the result dialog.
+
+        Args:
+            entries: The entries that were submitted for trashing.
+            results: Mapping of ``{path_str: error_message | None}`` from
+                ``trash_entries()``.
+
+        Returns:
+            None.
+        """
         # Rimuovi gli entry eliminati con successo
         removed_paths = {p for p, err in results.items() if err is None}
         self._selected_paths -= removed_paths
@@ -612,32 +762,64 @@ class DotCleanerApp(App[None]):
         self._apply_filter()
 
         def close_result(_: None) -> None:
+            """No-op callback to satisfy the push_screen signature.
+
+            Args:
+                _: Ignored result value from ResultScreen.
+
+            Returns:
+                None.
+            """
             pass
 
         self.push_screen(ResultScreen(results), close_result)
 
     def action_filter_all(self) -> None:
+        """Switch the active filter to show all entries.
+
+        Returns:
+            None.
+        """
         self._current_filter = "all"
         self._apply_filter()
         self._sync_select("all")
 
     def action_filter_uninstalled(self) -> None:
+        """Switch the active filter to show only uninstalled entries.
+
+        Returns:
+            None.
+        """
         self._current_filter = "uninstalled"
         self._apply_filter()
         self._sync_select("uninstalled")
 
     def action_filter_unknown(self) -> None:
+        """Switch the active filter to show only unknown entries.
+
+        Returns:
+            None.
+        """
         self._current_filter = "unknown"
         self._apply_filter()
         self._sync_select("unknown")
 
     def action_filter_not_installed(self) -> None:
+        """Switch the active filter to show uninstalled and unknown entries.
+
+        Returns:
+            None.
+        """
         self._current_filter = "not_installed"
         self._apply_filter()
         self._sync_select("not_installed")
 
     def action_reload(self) -> None:
-        """Ricarica la scansione da zero."""
+        """Reset all state and restart the background scan from scratch.
+
+        Returns:
+            None.
+        """
         self._all_entries = []
         self._filtered_entries = []
         self._selected_paths = set()
@@ -646,7 +828,14 @@ class DotCleanerApp(App[None]):
         self._load_data()
 
     def _sync_select(self, value: str) -> None:
-        """Sincronizza il widget Select con il filtro corrente."""
+        """Synchronise the filter Select widget to match the current filter value.
+
+        Args:
+            value: The filter value to set on the Select widget.
+
+        Returns:
+            None.
+        """
         try:
             sel = self.query_one("#filter-select", Select)
             sel.value = value
@@ -659,13 +848,28 @@ class DotCleanerApp(App[None]):
 
     @on(Select.Changed, "#filter-select")
     def on_filter_changed(self, event: Select.Changed) -> None:
+        """Apply a new filter when the Select widget value changes.
+
+        Args:
+            event: The ``Select.Changed`` event carrying the new value.
+
+        Returns:
+            None.
+        """
         if event.value and event.value != self._current_filter:
             self._current_filter = str(event.value)
             self._apply_filter()
 
     @on(DataTable.RowSelected)
     def on_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Seleziona/deseleziona la riga al click o Enter."""
+        """Toggle row selection when a table row is activated via click or Enter.
+
+        Args:
+            event: The ``DataTable.RowSelected`` event carrying the row key.
+
+        Returns:
+            None.
+        """
         if event.row_key and event.row_key.value:
             key = str(event.row_key.value)
             if key in self._selected_paths:

@@ -1,8 +1,8 @@
-"""
-cleaner.py - Spostamento di dot files/directory nel cestino FreeDesktop.
+"""FreeDesktop Trash helper for moving dot entries to the recycle bin.
 
-Usa send2trash per rispettare le specifiche XDG Trash (~/.local/share/Trash).
-Il cestino è recuperabile tramite qualsiasi file manager (Nautilus, Dolphin, ecc.)
+Uses ``send2trash`` to respect the XDG Trash specification
+(``~/.local/share/Trash``).  Moved items can be recovered via any
+file manager (Nautilus, Dolphin, etc.).
 """
 
 from __future__ import annotations
@@ -35,20 +35,20 @@ _send2trash = _send2trash_fn
 
 
 class CleanError(Exception):
-    """Errore durante l'eliminazione di un dot entry."""
+    """Raised when a dot entry cannot be moved to the trash."""
 
     pass
 
 
 def trash_entry(entry: DotEntry) -> None:
-    """
-    Sposta un DotEntry nel cestino FreeDesktop (~/.local/share/Trash).
+    """Move a single DotEntry to the FreeDesktop trash.
 
     Args:
-        entry: Il DotEntry da spostare nel cestino.
+        entry: The ``DotEntry`` whose path should be trashed.
 
     Raises:
-        CleanError: Se l'operazione fallisce.
+        CleanError: If the path does not exist, if ``send2trash`` is not
+            installed, or if ``send2trash`` raises any exception.
     """
     path = entry.path
 
@@ -68,15 +68,18 @@ def trash_entry(entry: DotEntry) -> None:
 
 
 def trash_entries(entries: list[DotEntry]) -> dict[str, str | None]:
-    """
-    Sposta una lista di DotEntry nel cestino.
+    """Move a list of DotEntry objects to the FreeDesktop trash.
+
+    Each entry is processed independently; a failure on one entry does not
+    prevent subsequent entries from being attempted.
 
     Args:
-        entries: Lista di DotEntry da spostare.
+        entries: List of ``DotEntry`` objects to trash.
 
     Returns:
-        Dizionario {path_str: error_message | None}
-        dove None indica successo.
+        A mapping of ``{path_str: error_message | None}`` where ``None``
+        indicates success and a non-``None`` string contains the error
+        description.
     """
     results: dict[str, str | None] = {}
 
@@ -92,7 +95,14 @@ def trash_entries(entries: list[DotEntry]) -> dict[str, str | None]:
 
 
 def get_trash_dir() -> Path:
-    """Ritorna il percorso della directory del cestino FreeDesktop."""
+    """Return the path to the FreeDesktop Trash directory.
+
+    Respects the ``XDG_DATA_HOME`` environment variable when set; otherwise
+    falls back to ``~/.local/share/Trash``.
+
+    Returns:
+        ``Path`` object pointing to the Trash directory (may not yet exist).
+    """
     xdg_data = os.environ.get("XDG_DATA_HOME", "")
     if xdg_data:
         return Path(xdg_data) / "Trash"
@@ -100,11 +110,14 @@ def get_trash_dir() -> Path:
 
 
 def get_trash_size() -> int:
-    """
-    Calcola la dimensione totale del cestino in bytes.
+    """Compute the total size of files currently in the trash.
+
+    Walks ``<trash_dir>/files`` recursively.  Any unreadable entries are
+    silently skipped.
 
     Returns:
-        Dimensione in bytes, 0 se il cestino non esiste o non è accessibile.
+        Total size in bytes, or ``0`` if the trash directory does not exist
+        or is inaccessible.
     """
     trash_files = get_trash_dir() / "files"
     if not trash_files.is_dir():

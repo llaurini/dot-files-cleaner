@@ -132,8 +132,83 @@ Python **3.10+** is required (uses `X | Y` union syntax in type hints).
 
 1. **Documentation update** — update `README.md` and/or the relevant module docstrings to reflect any change in behaviour, public API, CLI flags, key bindings, or configuration format. If a new module or public function is added, document it in this file under [Module responsibilities](#module-responsibilities) as well.
 2. **Test update** — add or update tests to cover the changed behaviour. New functions must have at least one unit test. Bug fixes must include a regression test. Tests must pass before committing.
+3. **Docstring check** — every modified or newly added function, method, or class must have a compliant Google-style docstring (see [Docstring policy](#docstring-policy) below). Run the docstring linter before committing.
 
 Changes that touch only comments, formatting, or this `AGENTS.md` file are exempt.
+
+---
+
+## Docstring policy
+
+All docstrings in this project — in production code (`dotcleaner/`, `main.py`) **and** in test files (`tests/`) — must follow **Google style** as defined in the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings).
+
+### Rules
+
+1. **Every module, class, function, and method must have a docstring.** This includes private helpers (prefixed with `_`) and inner functions.
+2. **The summary line is mandatory.** It must be a single sentence ending with a period, on the first line of the docstring.
+3. **Sections `Args:`, `Returns:`, and `Raises:` are mandatory** whenever applicable, even when their content seems obvious.
+   - `Args:` — list every parameter with its type and description.
+   - `Returns:` — describe the return value and its type. Use `Returns: None.` for void functions.
+   - `Raises:` — list every exception that the function explicitly raises.
+4. **Properties** use only `Returns:` (no `Args:` — they take no explicit parameters).
+5. **`__init__` methods** describe the constructor arguments under `Args:`. They do not need a `Returns:` section.
+6. **Test methods** must have at least a one-line summary explaining *what behaviour is being asserted*. Sections `Args:`, `Returns:`, and `Raises:` are not required for test methods.
+7. **Inner functions** (functions defined inside other functions) must have at least a summary line.
+
+### Format reference
+
+```python
+def example(path: Path, verbose: bool = False) -> list[str]:
+    """Short summary sentence ending with a period.
+
+    Longer explanation if needed. Can span multiple paragraphs.
+
+    Args:
+        path: The filesystem path to scan.
+        verbose: If True, print extra debug output.
+
+    Returns:
+        A list of file names found at the given path.
+
+    Raises:
+        FileNotFoundError: If the path does not exist.
+        PermissionError: If the path is not readable.
+    """
+```
+
+```python
+@property
+def status(self) -> str:
+    """Current installation status of this entry.
+
+    Returns:
+        One of 'installed', 'uninstalled', or 'unknown'.
+    """
+```
+
+```python
+class Foo:
+    """Brief description of the class.
+
+    Longer explanation of purpose and usage.
+    """
+
+    def __init__(self, name: str) -> None:
+        """Initialise Foo.
+
+        Args:
+            name: Human-readable identifier for this instance.
+        """
+```
+
+### Verification command
+
+```bash
+# Docstring style check (must return 0 violations)
+./venv/bin/python -m pydocstyle --convention=google dotcleaner/ main.py tests/
+```
+
+`pydocstyle` is a dev dependency (listed in `requirements-dev.txt`).
 
 ---
 
@@ -141,7 +216,7 @@ Changes that touch only comments, formatting, or this `AGENTS.md` file are exemp
 
 ### Code style
 - Follow **PEP 8**. Use `black` formatting if available.
-- All public functions and classes must have docstrings.
+- All functions, methods, and classes — public **and** private — must have Google-style docstrings (see [Docstring policy](#docstring-policy)).
 - Type hints are required on all function signatures.
 - Use `from __future__ import annotations` at the top of every module.
 - **mypy** is used for static type checking with `strict = True`. Every code change must leave `mypy` error-free. Run it with:
@@ -182,6 +257,9 @@ Changes that touch only comments, formatting, or this `AGENTS.md` file are exemp
 ```bash
 # Type checking (must return 0 errors)
 ./venv/bin/python -m mypy dotcleaner/ main.py tests/
+
+# Docstring style check (must return 0 violations)
+./venv/bin/python -m pydocstyle --convention=google dotcleaner/ main.py tests/
 
 # Import sanity check
 ./venv/bin/python -c "from dotcleaner.app import DotCleanerApp; print('OK')"

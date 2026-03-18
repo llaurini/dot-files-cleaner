@@ -1,8 +1,8 @@
-"""
-test_scanner.py - Test funzionali per dotcleaner/scanner.py
+"""Functional tests for dotcleaner/scanner.py.
 
-Testa scan_home() su una home directory fittizia creata con tmp_path,
-verificando esclusioni, inclusioni, calcolo dimensioni e campi DotEntry.
+Tests ``scan_home()`` against a fake home directory built with ``tmp_path``,
+verifying exclusion rules, inclusion rules, size calculation, and all fields
+of the returned :class:`~dotcleaner.scanner.DotEntry` objects.
 """
 
 from __future__ import annotations
@@ -25,19 +25,19 @@ from dotcleaner.scanner import (
 
 
 class TestDotEntryProperties:
-    """Test delle proprietà calcolate di DotEntry."""
+    """Tests for the computed properties of DotEntry."""
 
     def test_status_unknown_when_no_packages(
         self, make_entry: Callable[..., DotEntry]
     ) -> None:
-        """status == 'unknown' se nessun pacchetto associato."""
+        """Asserts that status is 'unknown' when no packages are associated."""
         entry = make_entry(".foo", associated_packages=[])
         assert entry.status == "unknown"
 
     def test_status_installed_when_some_installed(
         self, make_entry: Callable[..., DotEntry]
     ) -> None:
-        """status == 'installed' se almeno un pacchetto è installato."""
+        """Asserts that status is 'installed' when at least one package is installed."""
         entry = make_entry(
             ".vim",
             associated_packages=["vim"],
@@ -49,7 +49,7 @@ class TestDotEntryProperties:
     def test_status_uninstalled_when_packages_but_none_installed(
         self, make_entry: Callable[..., DotEntry]
     ) -> None:
-        """status == 'uninstalled' se ci sono pacchetti ma nessuno installato."""
+        """Asserts that status is 'uninstalled' when packages exist but none are installed."""
         entry = make_entry(
             ".zoom",
             associated_packages=["zoom"],
@@ -61,7 +61,7 @@ class TestDotEntryProperties:
     def test_status_installed_even_if_some_uninstalled(
         self, make_entry: Callable[..., DotEntry]
     ) -> None:
-        """status == 'installed' se almeno uno è installato, anche con altri non installati."""
+        """Asserts that status is 'installed' when at least one package is installed, even with others not installed."""
         entry = make_entry(
             ".google-chrome",
             associated_packages=["google-chrome-stable", "google-chrome-beta"],
@@ -71,75 +71,73 @@ class TestDotEntryProperties:
         assert entry.status == "installed"
 
     def test_size_human_bytes(self, make_entry: Callable[..., DotEntry]) -> None:
-        """size_human ritorna bytes correttamente."""
+        """Asserts that size_human returns a correctly formatted bytes string."""
         entry = make_entry(".foo", size_bytes=500)
         assert entry.size_human == "500.0 B"
 
     def test_size_human_kilobytes(self, make_entry: Callable[..., DotEntry]) -> None:
-        """size_human ritorna kilobytes correttamente."""
+        """Asserts that size_human returns a correctly formatted kilobytes string."""
         entry = make_entry(".foo", size_bytes=2048)
         assert entry.size_human == "2.0 KB"
 
     def test_size_human_megabytes(self, make_entry: Callable[..., DotEntry]) -> None:
-        """size_human ritorna megabytes correttamente."""
+        """Asserts that size_human returns a correctly formatted megabytes string."""
         entry = make_entry(".foo", size_bytes=3 * 1024 * 1024)
         assert entry.size_human == "3.0 MB"
 
     def test_size_human_gigabytes(self, make_entry: Callable[..., DotEntry]) -> None:
-        """size_human ritorna gigabytes correttamente."""
+        """Asserts that size_human returns a correctly formatted gigabytes string."""
         entry = make_entry(".foo", size_bytes=2 * 1024 * 1024 * 1024)
         assert entry.size_human == "2.0 GB"
 
     def test_display_path_relative_to_home(
         self, tmp_path: Path, make_entry: Callable[..., DotEntry]
     ) -> None:
-        """display_path mostra il path relativo alla home."""
+        """Asserts that display_path is a non-empty string."""
         entry = make_entry(".vim")
-        # display_path usa Path.home(), non tmp_path, quindi sarà assoluto
-        # ma deve almeno essere una stringa non vuota
+        # display_path uses Path.home(), not tmp_path, so the result will be
+        # absolute, but it must be a non-empty string.
         assert entry.display_path
         assert isinstance(entry.display_path, str)
 
     def test_display_path_absolute_fallback(
         self, make_entry: Callable[..., DotEntry]
     ) -> None:
-        """display_path ritorna path assoluto se non è sotto home."""
+        """Asserts that display_path returns a non-empty string as absolute fallback."""
         entry = make_entry(".vim")
         result = entry.display_path
-        # Deve essere una stringa valida
         assert len(result) > 0
 
 
 # ---------------------------------------------------------------------------
-# Test: scan_home esclusioni ALWAYS_EXCLUDE
+# Test: scan_home exclusions ALWAYS_EXCLUDE
 # ---------------------------------------------------------------------------
 
 
 class TestScanHomeAlwaysExclude:
-    """Verifica che ALWAYS_EXCLUDE non venga mai incluso nei risultati."""
+    """Verifies that entries in ALWAYS_EXCLUDE never appear in results."""
 
     def test_ssh_excluded(self, fake_home: Path) -> None:
-        """.ssh non deve apparire nei risultati."""
+        """Asserts that .ssh is absent from scan results."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".ssh" not in names
 
     def test_gnupg_excluded(self, fake_home: Path) -> None:
-        """.gnupg non deve apparire nei risultati."""
+        """Asserts that .gnupg is absent from scan results."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".gnupg" not in names
 
     def test_cache_excluded(self, fake_home: Path) -> None:
-        """.cache non deve apparire nei risultati."""
+        """Asserts that .cache is absent from scan results."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".cache" not in names
 
     def test_all_always_exclude_respected(self, tmp_path: Path) -> None:
-        """Nessuna voce da ALWAYS_EXCLUDE appare, anche se creata fisicamente."""
+        """Asserts that no entry from ALWAYS_EXCLUDE appears, even when physically created."""
         home = tmp_path
-        # Crea ogni voce esclusa
         for name in ALWAYS_EXCLUDE:
             path = home / name
             path.mkdir(exist_ok=True)
@@ -149,43 +147,43 @@ class TestScanHomeAlwaysExclude:
         for excluded in ALWAYS_EXCLUDE:
             assert (
                 excluded not in result_names
-            ), f"{excluded} non dovrebbe essere nei risultati"
+            ), f"{excluded} should not appear in results"
 
 
 # ---------------------------------------------------------------------------
-# Test: scan_home — file singoli
+# Test: scan_home — single files
 # ---------------------------------------------------------------------------
 
 
 class TestScanHomeSingleFiles:
-    """Verifica la logica di inclusione dei file singoli."""
+    """Verifies the inclusion logic for single dot files."""
 
     def test_gitconfig_included(self, fake_home: Path) -> None:
-        """.gitconfig deve essere incluso (è in INCLUDE_SINGLE_FILES)."""
+        """Asserts that .gitconfig is included because it is in INCLUDE_SINGLE_FILES."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".gitconfig" in names
 
     def test_vimrc_included(self, fake_home: Path) -> None:
-        """.vimrc deve essere incluso."""
+        """Asserts that .vimrc is included because it is in INCLUDE_SINGLE_FILES."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".vimrc" in names
 
     def test_zshrc_included(self, fake_home: Path) -> None:
-        """.zshrc deve essere incluso."""
+        """Asserts that .zshrc is included because it is in INCLUDE_SINGLE_FILES."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".zshrc" in names
 
     def test_generic_single_file_excluded(self, fake_home: Path) -> None:
-        """.gitignore_global NON deve essere incluso (non è in INCLUDE_SINGLE_FILES)."""
+        """Asserts that .gitignore_global is excluded because it is not in INCLUDE_SINGLE_FILES."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".gitignore_global" not in names
 
     def test_included_file_is_not_dir(self, fake_home: Path) -> None:
-        """.gitconfig deve avere is_dir=False."""
+        """Asserts that .gitconfig has is_dir set to False."""
         entries = scan_home(home=fake_home)
         gitconfig = next((e for e in entries if e.name == ".gitconfig"), None)
         assert gitconfig is not None
@@ -193,39 +191,39 @@ class TestScanHomeSingleFiles:
 
 
 # ---------------------------------------------------------------------------
-# Test: scan_home — directory incluse
+# Test: scan_home — directories
 # ---------------------------------------------------------------------------
 
 
 class TestScanHomeDirectories:
-    """Verifica che le directory dot vengano incluse correttamente."""
+    """Verifies that dot directories are included correctly."""
 
     def test_vim_dir_included(self, fake_home: Path) -> None:
-        """.vim directory deve essere inclusa."""
+        """Asserts that the .vim directory is included in results."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".vim" in names
 
     def test_zoom_dir_included(self, fake_home: Path) -> None:
-        """.zoom directory deve essere inclusa."""
+        """Asserts that the .zoom directory is included in results."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert ".zoom" in names
 
     def test_dot_dir_is_dir_true(self, fake_home: Path) -> None:
-        """.vim entry deve avere is_dir=True."""
+        """Asserts that the .vim entry has is_dir set to True."""
         entries = scan_home(home=fake_home)
         vim_entry = next((e for e in entries if e.name == ".vim"), None)
         assert vim_entry is not None
         assert vim_entry.is_dir is True
 
     def test_source_home_dot(self, fake_home: Path) -> None:
-        """Voci da ~/.* hanno source='home_dot'."""
+        """Asserts that entries from ~/.* have source set to 'home_dot'."""
         entries = scan_home(home=fake_home)
         home_dot = [e for e in entries if e.source == "home_dot"]
         assert len(home_dot) > 0
         for e in home_dot:
-            assert e.name.startswith("."), f"{e.name} dovrebbe iniziare con '.'"
+            assert e.name.startswith("."), f"{e.name} should start with '.'"
 
 
 # ---------------------------------------------------------------------------
@@ -234,38 +232,38 @@ class TestScanHomeDirectories:
 
 
 class TestScanHomeConfig:
-    """Verifica scansione di ~/.config."""
+    """Verifies scanning of ~/.config entries."""
 
     def test_config_zoom_included(self, fake_home: Path) -> None:
-        """zoom dentro .config deve essere incluso."""
+        """Asserts that zoom inside .config is included in results."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert "zoom" in names
 
     def test_config_htop_excluded(self, fake_home: Path) -> None:
-        """htop dentro .config è in CONFIG_SYSTEM_EXCLUDE → escluso."""
+        """Asserts that htop inside .config is excluded via CONFIG_SYSTEM_EXCLUDE."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert "htop" not in names
 
     def test_config_dconf_excluded(self, fake_home: Path) -> None:
-        """dconf dentro .config è in CONFIG_SYSTEM_EXCLUDE → escluso."""
+        """Asserts that dconf inside .config is excluded via CONFIG_SYSTEM_EXCLUDE."""
         entries = scan_home(home=fake_home)
         names = {e.name for e in entries}
         assert "dconf" not in names
 
     def test_config_source_is_config(self, fake_home: Path) -> None:
-        """Voci da ~/.config hanno source='config'."""
+        """Asserts that entries from ~/.config have source set to 'config'."""
         entries = scan_home(home=fake_home)
         config_entries = [e for e in entries if e.source == "config"]
         assert len(config_entries) > 0
         for e in config_entries:
             assert "config" in str(
                 e.path
-            ), f"Path di {e.name} dovrebbe contenere .config"
+            ), f"Path of {e.name} should contain .config"
 
     def test_all_config_system_exclude_respected(self, tmp_path: Path) -> None:
-        """Nessuna voce da CONFIG_SYSTEM_EXCLUDE appare da ~/.config."""
+        """Asserts that no entry from CONFIG_SYSTEM_EXCLUDE appears under ~/.config."""
         home = tmp_path
         config_dir = home / ".config"
         config_dir.mkdir()
@@ -277,30 +275,30 @@ class TestScanHomeConfig:
         for excluded in CONFIG_SYSTEM_EXCLUDE:
             assert (
                 excluded not in result_names
-            ), f"{excluded} non dovrebbe essere nei risultati"
+            ), f"{excluded} should not appear in results"
 
 
 # ---------------------------------------------------------------------------
-# Test: scan_home — broken symlink
+# Test: scan_home — broken symlinks
 # ---------------------------------------------------------------------------
 
 
 class TestScanHomeBrokenSymlink:
-    """Verifica che i symlink rotti vengano ignorati."""
+    """Verifies that broken symlinks are silently ignored."""
 
     def test_broken_symlink_home_dot_excluded(self, tmp_path: Path) -> None:
-        """Un symlink rotto in ~/ viene ignorato."""
+        """Asserts that a broken symlink in ~/ is ignored by scan_home."""
         home = tmp_path
         broken = home / ".broken-app"
         broken.symlink_to(home / ".nonexistent-target")
-        assert not broken.exists()  # deve essere rotto
+        assert not broken.exists()  # confirm the symlink is broken
 
         entries = scan_home(home=home)
         names = {e.name for e in entries}
         assert ".broken-app" not in names
 
     def test_broken_symlink_config_excluded(self, tmp_path: Path) -> None:
-        """Un symlink rotto in ~/.config viene ignorato."""
+        """Asserts that a broken symlink in ~/.config is ignored by scan_home."""
         home = tmp_path
         config_dir = home / ".config"
         config_dir.mkdir()
@@ -313,15 +311,15 @@ class TestScanHomeBrokenSymlink:
 
 
 # ---------------------------------------------------------------------------
-# Test: scan_home — dimensioni
+# Test: scan_home — sizes
 # ---------------------------------------------------------------------------
 
 
 class TestScanHomeSizes:
-    """Verifica il calcolo delle dimensioni."""
+    """Verifies size calculation for files and directories."""
 
     def test_file_size_correct(self, tmp_path: Path) -> None:
-        """Un file incluso ha la dimensione corretta."""
+        """Asserts that an included file has its exact byte size recorded."""
         home = tmp_path
         content = b"x" * 512
         (home / ".gitconfig").write_bytes(content)
@@ -332,7 +330,7 @@ class TestScanHomeSizes:
         assert entry.size_bytes == 512
 
     def test_dir_size_recursive(self, tmp_path: Path) -> None:
-        """Una directory ha size_bytes >= dimensione totale dei suoi file."""
+        """Asserts that a directory's size_bytes is at least the sum of its files."""
         home = tmp_path
         vim_dir = home / ".vim"
         vim_dir.mkdir()
@@ -345,7 +343,7 @@ class TestScanHomeSizes:
         assert entry.size_bytes >= 300
 
     def test_empty_dir_size_zero(self, tmp_path: Path) -> None:
-        """Una directory vuota ha size_bytes == 0."""
+        """Asserts that an empty directory has size_bytes equal to zero."""
         home = tmp_path
         (home / ".emptyapp").mkdir()
 
@@ -356,51 +354,49 @@ class TestScanHomeSizes:
 
 
 # ---------------------------------------------------------------------------
-# Test: scan_home — campi DotEntry
+# Test: scan_home — DotEntry fields
 # ---------------------------------------------------------------------------
 
 
 class TestScanHomeDotEntryFields:
-    """Verifica i campi dei DotEntry restituiti da scan_home."""
+    """Verifies the fields of DotEntry objects returned by scan_home."""
 
     def test_name_matches_filesystem_name(self, fake_home: Path) -> None:
-        """Il campo name corrisponde al nome dell'entry nel filesystem."""
+        """Asserts that each entry's name matches the filesystem path's name component."""
         entries = scan_home(home=fake_home)
         for entry in entries:
             assert entry.name == entry.path.name
 
     def test_path_is_absolute(self, fake_home: Path) -> None:
-        """Il campo path è sempre assoluto."""
+        """Asserts that every entry's path is absolute."""
         entries = scan_home(home=fake_home)
         for entry in entries:
-            assert entry.path.is_absolute(), f"{entry.path} non è assoluto"
+            assert entry.path.is_absolute(), f"{entry.path} is not absolute"
 
     def test_associated_packages_empty_initially(self, fake_home: Path) -> None:
-        """associated_packages è vuoto dopo scan_home (il mapper non è stato chiamato)."""
+        """Asserts that associated_packages is empty immediately after scan_home."""
         entries = scan_home(home=fake_home)
         for entry in entries:
             assert entry.associated_packages == []
 
     def test_status_unknown_before_mapping(self, fake_home: Path) -> None:
-        """status è 'unknown' prima del mapping."""
+        """Asserts that status is 'unknown' before map_entries is called."""
         entries = scan_home(home=fake_home)
         for entry in entries:
             assert entry.status == "unknown"
 
     def test_no_duplicate_paths(self, fake_home: Path) -> None:
-        """Non ci sono path duplicati nei risultati."""
+        """Asserts that no two entries share the same path."""
         entries = scan_home(home=fake_home)
         paths = [str(e.path) for e in entries]
-        assert len(paths) == len(set(paths)), "Ci sono path duplicati!"
+        assert len(paths) == len(set(paths)), "Duplicate paths found!"
 
     def test_results_is_list(self, fake_home: Path) -> None:
-        """scan_home restituisce una lista."""
+        """Asserts that scan_home returns a list."""
         result = scan_home(home=fake_home)
         assert isinstance(result, list)
 
     def test_empty_home_returns_empty_list(self, tmp_path: Path) -> None:
-        """Una home completamente vuota restituisce lista vuota."""
-        home = tmp_path
-        # Non crea nulla
-        entries = scan_home(home=home)
+        """Asserts that a completely empty home directory yields an empty list."""
+        entries = scan_home(home=tmp_path)
         assert entries == []

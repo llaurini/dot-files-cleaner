@@ -1,5 +1,6 @@
-"""
-conftest.py - Fixture condivise per i test funzionali.
+"""Shared fixtures for functional tests.
+
+This module provides pytest fixtures used across all test files in this suite.
 """
 
 from __future__ import annotations
@@ -20,55 +21,61 @@ from dotcleaner.scanner import DotEntry
 
 @pytest.fixture()
 def fake_home(tmp_path: Path) -> Path:
-    """
-    Crea una struttura di home directory controllata per i test.
+    """Create a controlled home-directory structure for tests.
 
-    Struttura creata:
+    The layout created under ``tmp_path`` is::
+
         <tmp>/
-        ├── .gitconfig          (file, incluso in INCLUDE_SINGLE_FILES)
-        ├── .vimrc              (file, incluso in INCLUDE_SINGLE_FILES)
-        ├── .zshrc              (file, incluso in INCLUDE_SINGLE_FILES)
-        ├── .gitignore_global   (file singolo → NON incluso, non in INCLUDE_SINGLE_FILES)
-        ├── .ssh/               (dir → SEMPRE esclusa)
-        ├── .gnupg/             (dir → SEMPRE esclusa)
-        ├── .cache/             (dir → SEMPRE esclusa)
+        ├── .gitconfig          (file, in INCLUDE_SINGLE_FILES)
+        ├── .vimrc              (file, in INCLUDE_SINGLE_FILES)
+        ├── .zshrc              (file, in INCLUDE_SINGLE_FILES)
+        ├── .gitignore_global   (single file, NOT in INCLUDE_SINGLE_FILES)
+        ├── .ssh/               (dir, always excluded)
+        ├── .gnupg/             (dir, always excluded)
+        ├── .cache/             (dir, always excluded)
         ├── .config/
-        │   ├── zoom/           (dir → inclusa)
-        │   ├── htop/           (dir → esclusa da CONFIG_SYSTEM_EXCLUDE)
-        │   └── dconf/          (dir → esclusa da CONFIG_SYSTEM_EXCLUDE)
-        ├── .vim/               (dir → inclusa)
-        └── .zoom/              (dir → inclusa)
+        │   ├── zoom/           (dir, included)
+        │   ├── htop/           (dir, excluded via CONFIG_SYSTEM_EXCLUDE)
+        │   └── dconf/          (dir, excluded via CONFIG_SYSTEM_EXCLUDE)
+        ├── .vim/               (dir, included)
+        └── .zoom/              (dir, included)
+
+    Args:
+        tmp_path: Pytest-provided temporary directory path.
+
+    Returns:
+        The root of the fake home directory (``tmp_path`` itself).
     """
     home = tmp_path
 
-    # File singoli inclusi
+    # Single files that are in INCLUDE_SINGLE_FILES
     (home / ".gitconfig").write_text("[user]\n\tname = Test\n")
     (home / ".vimrc").write_text("set nocompatible\n")
     (home / ".zshrc").write_text("export PATH=$PATH:/usr/local/bin\n")
 
-    # File singolo non incluso (non in INCLUDE_SINGLE_FILES)
+    # Single file NOT in INCLUDE_SINGLE_FILES — must be excluded
     (home / ".gitignore_global").write_text("*.pyc\n")
 
-    # Directory escluse da ALWAYS_EXCLUDE
+    # Directories excluded via ALWAYS_EXCLUDE
     (home / ".ssh").mkdir()
     (home / ".ssh" / "id_rsa").write_text("FAKE KEY")
     (home / ".gnupg").mkdir()
     (home / ".cache").mkdir()
 
-    # Directory incluse
+    # Directories that should be included
     (home / ".vim").mkdir()
     (home / ".vim" / "autoload").mkdir()
     (home / ".vim" / "autoload" / "plug.vim").write_bytes(b"x" * 1024)
     (home / ".zoom").mkdir()
     (home / ".zoom" / "data.conf").write_text("zoom config\n")
 
-    # .config con voci incluse ed escluse
+    # ~/.config entries: some included, some excluded
     config_dir = home / ".config"
     config_dir.mkdir()
     (config_dir / "zoom").mkdir()
     (config_dir / "zoom" / "zoom.conf").write_text("zoom settings\n")
-    (config_dir / "htop").mkdir()  # esclusa da CONFIG_SYSTEM_EXCLUDE
-    (config_dir / "dconf").mkdir()  # esclusa da CONFIG_SYSTEM_EXCLUDE
+    (config_dir / "htop").mkdir()   # excluded via CONFIG_SYSTEM_EXCLUDE
+    (config_dir / "dconf").mkdir()  # excluded via CONFIG_SYSTEM_EXCLUDE
 
     return home
 
@@ -80,11 +87,21 @@ def fake_home(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
-    """
-    Factory fixture che restituisce una funzione per creare DotEntry di test.
+    """Return a factory function that creates ``DotEntry`` instances for tests.
 
-    Utilizzo:
+    The returned factory creates the corresponding filesystem path under
+    ``tmp_path`` and constructs a :class:`~dotcleaner.scanner.DotEntry` with
+    the given attributes.
+
+    Example::
+
         entry = make_entry(".zoom", is_dir=True, source="home_dot")
+
+    Args:
+        tmp_path: Pytest-provided temporary directory path.
+
+    Returns:
+        A callable that accepts entry parameters and returns a ``DotEntry``.
     """
 
     def _factory(
@@ -98,6 +115,21 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
         uninstalled_packages: list[str] | None = None,
         match_source: str = "",
     ) -> DotEntry:
+        """Build and return a single ``DotEntry`` for use in tests.
+
+        Args:
+            name: Filesystem name of the entry (e.g. ``".vim"``).
+            is_dir: If ``True``, create a directory; otherwise create a file.
+            size_bytes: Reported size in bytes stored on the entry.
+            source: Scan source label (``"home_dot"`` or ``"config"``).
+            associated_packages: Optional list of package names to assign.
+            installed_packages: Optional list of installed package names.
+            uninstalled_packages: Optional list of uninstalled package names.
+            match_source: Mapping phase that produced the association.
+
+        Returns:
+            A fully initialised ``DotEntry`` backed by a real filesystem path.
+        """
         path = tmp_path / name
         if is_dir:
             path.mkdir(exist_ok=True)
@@ -130,12 +162,15 @@ def make_entry(tmp_path: Path) -> Callable[..., DotEntry]:
 
 @pytest.fixture()
 def mock_checker() -> MagicMock:
-    """
-    Ritorna un MagicMock di PackageChecker con un set di pacchetti installati
-    predefiniti, configurabile per i singoli test.
+    """Return a ``MagicMock`` of ``PackageChecker`` with a predefined installed set.
 
-    Pacchetti "installati" di default:
-        - vim, git, zsh, tmux, curl, wget, npm
+    The mock is pre-configured with the following packages treated as installed:
+    ``vim``, ``git``, ``zsh``, ``tmux``, ``curl``, ``wget``, ``npm``.
+    Individual tests may override ``side_effect`` or ``return_value`` as needed.
+
+    Returns:
+        A ``MagicMock`` that mimics the public interface of
+        :class:`~dotcleaner.checker.PackageChecker`.
     """
     installed = frozenset({"vim", "git", "zsh", "tmux", "curl", "wget", "npm"})
     checker = MagicMock()

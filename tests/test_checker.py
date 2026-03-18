@@ -1,7 +1,7 @@
-"""
-test_checker.py - Test funzionali per dotcleaner/checker.py
+"""Functional tests for dotcleaner/checker.py.
 
-Testa PackageChecker con subprocess mockato per evitare dipendenza da dpkg.
+Tests ``PackageChecker`` with a mocked ``subprocess`` to avoid any dependency
+on a real ``dpkg`` installation.
 """
 
 from __future__ import annotations
@@ -15,14 +15,18 @@ from dotcleaner.checker import PackageChecker, get_checker
 
 
 # ---------------------------------------------------------------------------
-# Helpers per costruire output dpkg-query fittizio
+# Helpers for building fake dpkg-query output
 # ---------------------------------------------------------------------------
 
 
 def _dpkg_query_output(packages: list[str]) -> str:
-    """
-    Genera output del formato 'dpkg-query -f ${Package}\\n${Status}\\n -W *'
-    per una lista di pacchetti.
+    """Generate fake output in the format produced by ``dpkg-query -f '${Package}\\n${Status}\\n' -W '*'``.
+
+    Args:
+        packages: List of package names to mark as installed.
+
+    Returns:
+        A newline-delimited string alternating package name and install status.
     """
     lines = []
     for pkg in packages:
@@ -32,21 +36,35 @@ def _dpkg_query_output(packages: list[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Fixture: checker con pacchetti iniettati
+# Fixture: checker with injected packages
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
 def checker_with_packages() -> Callable[[list[str]], PackageChecker]:
-    """
-    Ritorna una factory che crea un PackageChecker con pacchetti specificati,
-    senza invocare dpkg reale.
+    """Return a factory that creates a ``PackageChecker`` pre-loaded with specific packages.
 
-    Utilizzo:
+    The returned factory bypasses the real ``dpkg`` invocation, making tests
+    fully hermetic.
+
+    Example::
+
         checker = checker_with_packages(["vim", "git", "python3"])
+
+    Returns:
+        A callable that accepts a list of installed package names and returns
+        a pre-configured :class:`~dotcleaner.checker.PackageChecker`.
     """
 
     def _factory(installed_list: list[str]) -> PackageChecker:
+        """Build a ``PackageChecker`` pre-loaded with the given installed packages.
+
+        Args:
+            installed_list: Package names to treat as installed.
+
+        Returns:
+            A ``PackageChecker`` instance with ``_loaded`` set to ``True``.
+        """
         checker = PackageChecker()
         checker._installed = frozenset(p.lower() for p in installed_list)
         checker._loaded = True
@@ -56,15 +74,15 @@ def checker_with_packages() -> Callable[[list[str]], PackageChecker]:
 
 
 # ---------------------------------------------------------------------------
-# Test: load() via dpkg-query mockato
+# Test: load() via mocked dpkg-query
 # ---------------------------------------------------------------------------
 
 
 class TestPackageCheckerLoad:
-    """Test del caricamento dei pacchetti via dpkg-query."""
+    """Tests for package loading via dpkg-query."""
 
     def test_load_parses_dpkg_query_output(self) -> None:
-        """load() deve parsare correttamente l'output di dpkg-query."""
+        """Asserts that load() correctly parses standard dpkg-query output."""
         fake_output = _dpkg_query_output(["vim", "git", "zsh"])
         mock_result = MagicMock()
         mock_result.stdout = fake_output
@@ -78,7 +96,7 @@ class TestPackageCheckerLoad:
         assert "zsh" in checker.installed_packages
 
     def test_load_excludes_deinstalled_packages(self) -> None:
-        """load() non include pacchetti non installati."""
+        """Asserts that load() omits packages with a deinstall status."""
         fake_output = "vim\ninstall ok installed\ngit\ndeinstall ok config-files\n"
         mock_result = MagicMock()
         mock_result.stdout = fake_output
@@ -91,7 +109,7 @@ class TestPackageCheckerLoad:
         assert "git" not in checker.installed_packages
 
     def test_load_normalizes_to_lowercase(self) -> None:
-        """I nomi pacchetti sono normalizzati in lowercase."""
+        """Asserts that package names are stored in lowercase after load()."""
         fake_output = "VIM\ninstall ok installed\n"
         mock_result = MagicMock()
         mock_result.stdout = fake_output
@@ -103,7 +121,7 @@ class TestPackageCheckerLoad:
         assert "vim" in checker.installed_packages
 
     def test_load_fallback_on_dpkg_get_selections(self) -> None:
-        """Se dpkg-query non restituisce risultati, usa dpkg --get-selections."""
+        """Asserts that load() falls back to dpkg --get-selections when dpkg-query returns nothing."""
         empty_result = MagicMock()
         empty_result.stdout = ""
 
@@ -118,7 +136,7 @@ class TestPackageCheckerLoad:
         assert "git" in checker.installed_packages
 
     def test_load_graceful_on_file_not_found(self) -> None:
-        """Se dpkg non esiste, installed_packages è frozenset vuoto."""
+        """Asserts that load() yields an empty frozenset when dpkg is not found."""
         with patch("subprocess.run", side_effect=FileNotFoundError):
             checker = PackageChecker()
             checker.load()
@@ -126,7 +144,7 @@ class TestPackageCheckerLoad:
         assert checker.installed_packages == frozenset()
 
     def test_load_graceful_on_timeout(self) -> None:
-        """Se dpkg va in timeout, installed_packages è frozenset vuoto."""
+        """Asserts that load() yields an empty frozenset when dpkg times out."""
         import subprocess
 
         with patch(
@@ -139,7 +157,7 @@ class TestPackageCheckerLoad:
         assert checker.installed_packages == frozenset()
 
     def test_installed_packages_lazy_loads(self) -> None:
-        """installed_packages chiama load() automaticamente se non ancora caricato."""
+        """Asserts that accessing installed_packages triggers an automatic load() call."""
         fake_output = _dpkg_query_output(["vim"])
         mock_result = MagicMock()
         mock_result.stdout = fake_output
@@ -158,24 +176,26 @@ class TestPackageCheckerLoad:
 
 
 class TestIsInstalledDpkg:
-    """Test di is_installed_dpkg()."""
+    """Tests for is_installed_dpkg()."""
 
     def test_returns_true_for_installed_package(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that is_installed_dpkg returns True for a known-installed package."""
         checker = checker_with_packages(["vim", "git"])
         assert checker.is_installed_dpkg("vim") is True
 
     def test_returns_false_for_missing_package(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that is_installed_dpkg returns False for a package not in the installed set."""
         checker = checker_with_packages(["vim"])
         assert checker.is_installed_dpkg("zoom") is False
 
     def test_case_insensitive(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """La verifica è case-insensitive."""
+        """Asserts that the installed check is case-insensitive."""
         checker = checker_with_packages(["vim"])
         assert checker.is_installed_dpkg("VIM") is True
         assert checker.is_installed_dpkg("Vim") is True
@@ -183,6 +203,7 @@ class TestIsInstalledDpkg:
     def test_empty_packages_returns_false(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that is_installed_dpkg returns False when no packages are loaded."""
         checker = checker_with_packages([])
         assert checker.is_installed_dpkg("vim") is False
 
@@ -193,12 +214,12 @@ class TestIsInstalledDpkg:
 
 
 class TestIsBinaryAvailable:
-    """Test di is_binary_available()."""
+    """Tests for is_binary_available()."""
 
     def test_returns_true_for_existing_binary(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """Se il binario è nel PATH, ritorna True."""
+        """Asserts that is_binary_available returns True when the binary is found in PATH."""
         checker = checker_with_packages([])
         with patch("shutil.which", return_value="/usr/bin/vim"):
             assert checker.is_binary_available("vim") is True
@@ -206,7 +227,7 @@ class TestIsBinaryAvailable:
     def test_returns_false_for_missing_binary(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """Se il binario non è nel PATH, ritorna False."""
+        """Asserts that is_binary_available returns False when the binary is not in PATH."""
         checker = checker_with_packages([])
         with patch("shutil.which", return_value=None):
             assert checker.is_binary_available("nonexistent-app") is False
@@ -218,11 +239,12 @@ class TestIsBinaryAvailable:
 
 
 class TestCheckPackages:
-    """Test di check_packages()."""
+    """Tests for check_packages()."""
 
     def test_splits_installed_and_uninstalled(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that check_packages correctly partitions installed and uninstalled packages."""
         checker = checker_with_packages(["vim", "git"])
         installed, uninstalled = checker.check_packages(
             ["vim", "git", "zoom", "nonexistent"]
@@ -235,6 +257,7 @@ class TestCheckPackages:
     def test_all_installed(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that check_packages returns all packages as installed when all are present."""
         checker = checker_with_packages(["vim", "git"])
         installed, uninstalled = checker.check_packages(["vim", "git"])
         assert installed == ["vim", "git"]
@@ -243,6 +266,7 @@ class TestCheckPackages:
     def test_all_uninstalled(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that check_packages returns all packages as uninstalled when none are present."""
         checker = checker_with_packages(["vim"])
         installed, uninstalled = checker.check_packages(["zoom", "slack"])
         assert installed == []
@@ -252,6 +276,7 @@ class TestCheckPackages:
     def test_empty_input_returns_empty_lists(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that check_packages returns two empty lists for an empty input."""
         checker = checker_with_packages(["vim"])
         installed, uninstalled = checker.check_packages([])
         assert installed == []
@@ -260,8 +285,8 @@ class TestCheckPackages:
     def test_binary_fallback_marks_as_installed(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """Un pacchetto non in dpkg ma con binario nel PATH è 'installed'."""
-        checker = checker_with_packages([])  # dpkg vuoto
+        """Asserts that a package absent from dpkg but found via which is treated as installed."""
+        checker = checker_with_packages([])  # empty dpkg
         with patch("shutil.which", return_value="/snap/bin/zoom"):
             installed, uninstalled = checker.check_packages(["zoom"])
         assert "zoom" in installed
@@ -269,19 +294,22 @@ class TestCheckPackages:
 
 
 # ---------------------------------------------------------------------------
-# Test: find_matching_packages — token-level matching (no falsi positivi)
+# Test: find_matching_packages — token-level matching (no false positives)
 # ---------------------------------------------------------------------------
 
 
 class TestFindMatchingPackages:
-    """
-    Test critico: verifica che find_matching_packages usi token-level matching
-    e non il semplice substring matching.
+    """Critical tests verifying that find_matching_packages uses token-level matching.
+
+    Simple substring matching (e.g. ``"micro" in "microsoft-edge-beta"``) must
+    never produce false positives.  All matching must be done at the token
+    boundary level (split on ``-``, ``_``, ``.``).
     """
 
     def test_exact_name_matches(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that an exact package name is returned as a match."""
         checker = checker_with_packages(["vim", "git", "python3"])
         result = checker.find_matching_packages("vim")
         assert "vim" in result
@@ -289,7 +317,7 @@ class TestFindMatchingPackages:
     def test_name_as_first_token_matches(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """'vim' dovrebbe trovare 'vim-tiny', 'vim-gtk3' ecc. tramite token base."""
+        """Asserts that a base name matches packages where it appears as a token (e.g. vim-tiny)."""
         checker = checker_with_packages(["vim-tiny", "vim-gtk3", "vim-nox"])
         result = checker.find_matching_packages("vim")
         assert "vim-tiny" in result or "vim-gtk3" in result or "vim-nox" in result
@@ -297,10 +325,7 @@ class TestFindMatchingPackages:
     def test_no_false_positive_micro_in_microsoft(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """
-        'micro' NON deve trovare 'microsoft-edge-beta'.
-        Questo è l'invariante critico anti-falsi-positivi.
-        """
+        """Asserts that 'micro' does not match 'microsoft-edge-beta' (critical anti-false-positive invariant)."""
         checker = checker_with_packages(
             ["microsoft-edge-beta", "microsoft-edge-stable"]
         )
@@ -311,17 +336,18 @@ class TestFindMatchingPackages:
     def test_no_false_positive_git_in_gitk(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
-        """'git' come token esatto non deve matchare 'gitk' (diverso token)."""
+        """Asserts that 'git' as an exact token does not match 'gitk' but does match 'git-core'."""
         checker = checker_with_packages(["gitk", "git-core"])
         result = checker.find_matching_packages("git")
-        # 'gitk' ha token base 'gitk', non 'git'
+        # 'gitk' has base token 'gitk', not 'git'
         assert "gitk" not in result
-        # 'git-core' ha 'git' come token, quindi DEVE matchare
+        # 'git-core' has 'git' as a token, so it MUST match
         assert "git-core" in result
 
     def test_returns_sorted_list(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that find_matching_packages returns results in sorted order."""
         checker = checker_with_packages(
             ["zsh-syntax-highlighting", "zsh-autosuggestions", "zsh"]
         )
@@ -331,6 +357,7 @@ class TestFindMatchingPackages:
     def test_empty_packages_returns_empty(
         self, checker_with_packages: Callable[[list[str]], PackageChecker]
     ) -> None:
+        """Asserts that an empty installed set yields an empty match list."""
         checker = checker_with_packages([])
         result = checker.find_matching_packages("vim")
         assert result == []
@@ -342,20 +369,20 @@ class TestFindMatchingPackages:
 
 
 class TestGetChecker:
-    """Test del singleton get_checker()."""
+    """Tests for the get_checker() singleton factory."""
 
     def test_get_checker_returns_same_instance(self) -> None:
-        """get_checker() ritorna sempre la stessa istanza."""
+        """Asserts that successive calls to get_checker() return the identical instance."""
         import dotcleaner.checker as checker_module
 
-        # Reset del singleton per isolamento test
+        # Reset the singleton for test isolation
         checker_module._checker = None
         a = get_checker()
         b = get_checker()
         assert a is b
 
     def test_get_checker_returns_package_checker(self) -> None:
-        """get_checker() ritorna un'istanza di PackageChecker."""
+        """Asserts that get_checker() returns an instance of PackageChecker."""
         import dotcleaner.checker as checker_module
 
         checker_module._checker = None

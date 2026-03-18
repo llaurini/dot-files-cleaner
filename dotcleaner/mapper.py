@@ -1,10 +1,10 @@
-"""
-mapper.py - Associa i dot entries ai pacchetti Debian corrispondenti.
+"""Map dot entries to their owning Debian packages using a three-phase strategy.
 
-Strategia in tre fasi:
-1. Database predefinito (known_packages.json): match esatto o su varianti normalizzate
-2. Rilevamento tramite .desktop file: cerca l'app nei file .desktop di sistema
-3. Euristica dpkg: cerca il nome normalizzato tra i pacchetti installati
+Phase 1 — Database lookup via ``known_packages.json``: exact or variant match.
+Phase 2 — ``.desktop`` file lookup: find the app in system application files
+           and determine the owning package with ``dpkg -S``.
+Phase 3 — Heuristic: search the name among installed packages via
+           ``PackageChecker.find_matching_packages``.
 """
 
 from __future__ import annotations
@@ -35,7 +35,15 @@ _DESKTOP_DIRS = [
 
 
 def _load_db() -> dict[str, list[str]]:
-    """Carica il database di mapping da JSON."""
+    """Load the package mapping database from the bundled JSON file.
+
+    Results are cached in the module-level ``_db`` variable so the file is
+    read at most once per process.  Keys starting with ``_`` are stripped
+    because they are treated as comments or metadata.
+
+    Returns:
+        Mapping of normalised dot-entry names to lists of Debian package names.
+    """
     global _db
     if _db is None:
         with _DB_PATH.open("r", encoding="utf-8") as f:
@@ -46,11 +54,18 @@ def _load_db() -> dict[str, list[str]]:
 
 
 def _normalize(name: str) -> str:
-    """
-    Normalizza un nome per il confronto:
-    - lowercase
-    - rimuove il prefisso '.'
-    - sostituisce underscore/spazi con '-'
+    """Normalise a dot-entry name for comparison.
+
+    Transformations applied (in order):
+    - Convert to lowercase.
+    - Strip a leading ``'.'`` character.
+    - Replace underscores and whitespace with ``'-'``.
+
+    Args:
+        name: Raw filesystem name (e.g. ``'.My_App'``).
+
+    Returns:
+        Normalised name string (e.g. ``'my-app'``).
     """
     n = name.lower().lstrip(".")
     n = re.sub(r"[_\s]+", "-", n)
@@ -58,15 +73,22 @@ def _normalize(name: str) -> str:
 
 
 def _derive_variants(normalized_name: str) -> list[str]:
-    """
-    Genera varianti del nome normalizzato da provare nel database.
-    Gestisce pattern comuni come:
-    - konsolerc -> konsole (suffisso rc)
-    - kmail2rc  -> kmail (suffisso numerico + rc)
-    - color.jcnf -> color (estensione)
-    - kwinrc.bak -> kwinrc -> kwin (backup + rc)
-    - org.kde.something -> something
-    - plasmadiscoverupdates -> plasmadiscover -> discover
+    """Generate candidate variants of a normalised name for database lookup.
+
+    Handles common patterns such as:
+    - ``konsolerc``  → ``konsole``  (strip ``rc`` suffix)
+    - ``kmail2rc``   → ``kmail``    (strip numeric + ``rc`` suffix)
+    - ``color.conf`` → ``color``    (strip extension)
+    - ``kwinrc.bak`` → ``kwinrc`` → ``kwin``
+    - ``org.kde.something`` → ``something``
+    - ``gimp-2.8``   → ``gimp``     (strip version suffix)
+
+    Args:
+        normalized_name: Already-normalised dot-entry name.
+
+    Returns:
+        List of candidate strings to try in the database, starting with the
+        original name.  The list contains no duplicates.
     """
     variants = [normalized_name]
     n = normalized_name
@@ -107,18 +129,33 @@ def _derive_variants(normalized_name: str) -> list[str]:
 
 @lru_cache(maxsize=512)
 def _lookup_database_cached(normalized_name: str) -> tuple[str, ...] | None:
-    """Versione cached di _lookup_database. Ritorna tuple per essere hashable."""
+    """Cached wrapper around ``_lookup_database`` returning a hashable result.
+
+    Args:
+        normalized_name: Already-normalised dot-entry name.
+
+    Returns:
+        Tuple of package names if found, or ``None`` if no match exists.
+    """
     result = _lookup_database(normalized_name)
     return tuple(result) if result is not None else None
 
 
 def _lookup_database(normalized_name: str) -> list[str] | None:
-    """
-    Cerca il nome normalizzato nel database.
-    Prova multiple varianti del nome.
+    """Search the package database for a normalised name, trying all variants.
+
+    Matching is attempted in three ways for each variant:
+    1. Exact key match.
+    2. Prefix-token match (e.g. ``'konsole-ssh-config'`` → key ``'konsole'``).
+    3. Reverse token match: the key appears as an exact token or bigram inside
+       the name (guards against false positives such as
+       ``'micro' in 'microsoft-edge-beta'``).
+
+    Args:
+        normalized_name: Already-normalised dot-entry name.
 
     Returns:
-        Lista di pacchetti se trovato, None altrimenti.
+        List of Debian package names if a match is found, or ``None``.
     """
     db = _load_db()
     variants = _derive_variants(normalized_name)
@@ -162,15 +199,17 @@ def _lookup_database(normalized_name: str) -> list[str] | None:
 
 @lru_cache(maxsize=256)
 def _find_desktop_package(app_name: str) -> str | None:
-    """
-    Cerca nei file .desktop di sistema se esiste un'applicazione con
-    questo nome e trova il pacchetto Debian che la fornisce.
+    """Find the Debian package that owns an application's ``.desktop`` file.
+
+    Searches ``/usr/share/applications``, ``/usr/local/share/applications``,
+    and ``~/.local/share/applications`` for a ``.desktop`` file matching
+    *app_name*, then resolves the owning package via ``dpkg -S``.
 
     Args:
-        app_name: Nome normalizzato dell'applicazione.
+        app_name: Normalised application name to search for.
 
     Returns:
-        Nome del pacchetto Debian o None.
+        Debian package name string, or ``None`` if no match is found.
     """
     # Genera possibili nomi di file .desktop da cercare
     desktop_candidates = [
@@ -225,17 +264,21 @@ def _find_desktop_package(app_name: str) -> str | None:
 
 
 def _heuristic_lookup(normalized_name: str, checker: PackageChecker) -> list[str]:
-    """
-    Cerca pacchetti installati che corrispondono euristicamente al nome.
+    """Find packages matching the name using heuristic strategies.
 
-    Strategia:
-    1. Verifica se esiste un .desktop file e da quale pacchetto proviene
-    2. Il nome stesso come nome di pacchetto dpkg
-    3. La prima parola del nome come pacchetto dpkg
-    4. Ricerca per sottostringa tra i pacchetti installati
+    Strategies applied in order of confidence:
+    1. ``.desktop`` file lookup — resolves owning package via ``dpkg -S``.
+    2. Exact dpkg name match for the normalised name or its variants.
+    3. First token of the name as a dpkg package name.
+    4. Substring search among installed packages (minimum 5-char name to
+       avoid overly generic matches).
+
+    Args:
+        normalized_name: Already-normalised dot-entry name.
+        checker: ``PackageChecker`` instance with packages already loaded.
 
     Returns:
-        Lista di pacchetti trovati (può essere vuota).
+        List of candidate package names (may be empty), capped at 5 entries.
     """
     candidates: list[str] = []
     variants = _derive_variants(normalized_name)
@@ -277,20 +320,20 @@ def _heuristic_lookup(normalized_name: str, checker: PackageChecker) -> list[str
 
 
 def map_entries(entries: list[DotEntry], checker: PackageChecker) -> list[DotEntry]:
-    """
-    Associa ogni DotEntry ai pacchetti Debian corrispondenti.
-    Popola i campi:
-      - associated_packages
-      - match_source
-      - installed_packages
-      - uninstalled_packages
+    """Associate each DotEntry with its owning Debian packages.
+
+    Populates the following fields on every entry in-place:
+    - ``associated_packages``
+    - ``match_source``
+    - ``installed_packages``
+    - ``uninstalled_packages``
 
     Args:
-        entries: Lista di DotEntry da processare.
-        checker: Istanza di PackageChecker con pacchetti già caricati.
+        entries: List of ``DotEntry`` objects to process.
+        checker: ``PackageChecker`` instance with packages already loaded.
 
     Returns:
-        La stessa lista con i campi popolati.
+        The same list with all package fields populated.
     """
     for entry in entries:
         normalized = _normalize(entry.name)

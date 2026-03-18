@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""
-dot-net-files-cleaner
-=====================
-Trova e rimuove i dot files/directory nella home che appartengono
-a programmi non più installati sul sistema Debian/Ubuntu.
+"""CLI entrypoint for dot-net-files-cleaner.
 
-Uso:
-    ./venv/bin/python main.py [--home /percorso/home]
+Finds and removes dot files and directories in the home directory that
+belong to programs no longer installed on the Debian/Ubuntu system.
+
+Example:
+    ./venv/bin/python main.py [--home /path/to/home]
 """
 
 from __future__ import annotations
@@ -17,6 +16,14 @@ from pathlib import Path
 
 
 def main() -> int:
+    """Parse CLI arguments and launch the TUI application.
+
+    Validates the home directory, then starts the Textual TUI.  Handles
+    missing dependencies gracefully by printing an actionable error message.
+
+    Returns:
+        Exit code: 0 on success, 1 on error.
+    """
     parser = argparse.ArgumentParser(
         prog="dot-net-files-cleaner",
         description="Pulizia dei dot files orfani nella home directory.",
